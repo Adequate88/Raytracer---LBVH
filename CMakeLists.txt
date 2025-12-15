@@ -19,25 +19,28 @@ set ( EXTERNAL
   src/external/stb_image.h
 )
 
-set ( SOURCE_NEXT_WEEK
-  src/TheNextWeek/main.cc
-  src/TheNextWeek/aabb.h
-  src/TheNextWeek/bvh.h
-  src/TheNextWeek/camera.h
-  src/TheNextWeek/color.h
-  src/TheNextWeek/constant_medium.h
-  src/TheNextWeek/hittable.h
-  src/TheNextWeek/hittable_list.h
-  src/TheNextWeek/interval.h
-  src/TheNextWeek/material.h
-  src/TheNextWeek/perlin.h
-  src/TheNextWeek/quad.h
-  src/TheNextWeek/ray.h
-  src/TheNextWeek/rtw_stb_image.h
-  src/TheNextWeek/rtweekend.h
-  src/TheNextWeek/sphere.h
-  src/TheNextWeek/texture.h
-  src/TheNextWeek/vec3.h
+set ( BVH_SOURCES
+  src/bvh/bvh.h
+)
+
+set ( RAYTRACER_SOURCES
+  src/raytracer/main.cc
+  src/raytracer/aabb.h
+  src/raytracer/camera.h
+  src/raytracer/color.h
+  src/raytracer/constant_medium.h
+  src/raytracer/hittable.h
+  src/raytracer/hittable_list.h
+  src/raytracer/interval.h
+  src/raytracer/material.h
+  src/raytracer/perlin.h
+  src/raytracer/quad.h
+  src/raytracer/ray.h
+  src/raytracer/rtw_stb_image.h
+  src/raytracer/rtweekend.h
+  src/raytracer/sphere.h
+  src/raytracer/texture.h
+  src/raytracer/vec3.h
 )
 
 include_directories(src)
@@ -70,4 +73,4 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 # Executables
-add_executable(theNextWeek ${EXTERNAL} ${SOURCE_NEXT_WEEK})
+add_executable(theNextWeek ${EXTERNAL} ${BVH_SOURCES} ${RAYTRACER_SOURCES})

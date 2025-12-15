@@ -13,7 +13,7 @@
 
 #include "hittable.h"
 #include "material.h"
-#include "bvh.h"
+#include "../bvh/bvh.h"
 
 class camera {
   public:

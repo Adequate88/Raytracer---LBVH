@@ -11,7 +11,7 @@
 
 #include "rtweekend.h"
 
-#include "bvh.h"
+#include "../bvh/bvh.h"
 #include "camera.h"
 #include "constant_medium.h"
 #include "hittable.h"
