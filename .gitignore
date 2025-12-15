@@ -1,0 +1,20 @@
+# Build artifacts
+build/
+*.o
+*.a
+*.so
+
+# Output files
+*.ppm
+*.png
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
