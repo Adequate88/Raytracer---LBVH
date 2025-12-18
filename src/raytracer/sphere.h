@@ -13,7 +13,6 @@
 
 #include "hittable.h"
 
-
 class sphere : public hittable {
   public:
     // Stationary Sphere
