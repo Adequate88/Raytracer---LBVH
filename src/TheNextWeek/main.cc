@@ -21,6 +21,8 @@
 #include "sphere.h"
 #include "texture.h"
 
+#include <chrono>
+
 
 void bouncing_spheres() {
     hittable_list world;
@@ -286,14 +288,27 @@ void cornell_box() {
 
     bvh world_bvh(world.objects);
 
-    // Print BVH tree structure (limit depth to 5 for readability)
+    // Print BVH tree structure
     world_bvh.print_tree(15);
-    std::clog << "\nTree depth: " << world_bvh.get_tree_depth() << "\n";
+    std::clog << "\nTree depth: " << world_bvh.get_tree_depth() << "\n\n";
 
     // Enable BVH statistics tracking
-    world_bvh.disable_statistics();
+    world_bvh.enable_statistics();
+
+    // Start render timing
+    auto render_start = std::chrono::high_resolution_clock::now();
 
     cam.render(world_bvh);
+
+    // End render timing
+    auto render_end = std::chrono::high_resolution_clock::now();
+    double render_time_ms = std::chrono::duration<double, std::milli>(render_end - render_start).count();
+
+    // Print timing results
+    std::clog << "\n=== Performance ===\n";
+    std::clog << "BVH construction time: " << world_bvh.get_construction_time() << " ms\n";
+    std::clog << "Rendering time: " << render_time_ms << " ms\n";
+    std::clog << "Total time: " << (world_bvh.get_construction_time() + render_time_ms) << " ms\n";
 
     // Print BVH statistics
     world_bvh.get_stats().print();
@@ -431,7 +446,7 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
 
 
 int main() {
-    switch (4) {
+    switch (7) {
         case 1:  bouncing_spheres();          break;
         case 2:  checkered_spheres();         break;
         case 3:  earth();                     break;

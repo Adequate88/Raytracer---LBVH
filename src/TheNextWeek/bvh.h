@@ -16,6 +16,7 @@
 #include "hittable_list.h"
 
 #include <algorithm>
+#include <chrono>
 
 
 // BVH statistics for performance analysis
@@ -49,6 +50,9 @@ struct bvh_node {
 class bvh {
   public:
     bvh(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(objects.size()){
+      // Start timing
+      auto start_time = std::chrono::high_resolution_clock::now();
+
       // Initialize relevant vectors
       primitive_indices.resize(N);
       for (int i = 0; i < N ; i++) {
@@ -59,9 +63,9 @@ class bvh {
       //
       // Edge case checks
       if (N == 0) {
-        pool[0].primCount = 0;          
-        pool[0].leftFirst = 0;          
-        pool[0].bbox = aabb::empty; 
+        pool[0].primCount = 0;
+        pool[0].leftFirst = 0;
+        pool[0].bbox = aabb::empty;
         return;
       }
 
@@ -70,17 +74,21 @@ class bvh {
         pool[0].leftFirst = 0;
         pool[0].bbox = objects[0]->bounding_box();
         return;
-      } 
+      }
 
       // Set head node values
       pool[0].leftFirst = 1;
       pool[0].primCount = 0;
-      
+
       // Create head node bbox
       create_bbox(0, 0, N);
 
       // Begin recursion
       subdivide(0, 0, N);
+
+      // End timing
+      auto end_time = std::chrono::high_resolution_clock::now();
+      construction_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
     }
 
     bool hit(const ray& r, interval ray_t, hit_record& rec, int node_idx = 0) const {
@@ -119,6 +127,9 @@ class bvh {
     void reset_stats() const { stats.reset(); }
     void increment_ray_count() const { if (enable_stats) stats.rays_traced++; }
 
+    // Timing methods
+    double get_construction_time() const { return construction_time_ms; }
+
     // BVH tree visualization
     void print_tree(int max_depth = 10) const {
         std::clog << "\n=== BVH Tree Structure ===\n";
@@ -146,6 +157,9 @@ class bvh {
     // Statistics tracking (mutable to allow tracking in const hit())
     mutable bvh_stats stats;
     mutable bool enable_stats = false;
+
+    // Construction time tracking
+    double construction_time_ms = 0.0;
 
     void create_bbox(int node_idx, int objects_start, int objects_end){
       if (objects_start >= objects_end) {
