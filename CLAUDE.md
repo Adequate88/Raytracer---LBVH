@@ -34,18 +34,22 @@ convert output.ppm output.png
 
 ## Code Architecture
 
-### Current Structure (Peter Shirley's Base)
+### Current Structure
 
 ```
 raytracer/
-├── CMakeLists.txt              # Build configuration (simplified to only build TheNextWeek)
+├── CMakeLists.txt              # Build configuration
 └── src/
     ├── external/               # STB image libraries
     │   ├── stb_image.h
     │   └── stb_image_write.h
-    └── TheNextWeek/            # Ray tracer with CPU BVH
+    ├── bvh/                    # BVH implementations
+    │   ├── bvh.h               # **CPU BVH (spatial median split) - WORKING**
+    │   ├── lbvh_cpu.h          # **CPU LBVH implementation - IN PROGRESS**
+    │   ├── morton.h            # Morton code primitive struct
+    │   └── bkup_bvh.h          # Backup of original BVH
+    └── raytracer/              # Ray tracer core
         ├── main.cc             # Entry point with test scenes
-        ├── bvh.h               # **CPU BVH implementation (SAH-based, recursive)**
         ├── aabb.h              # Axis-aligned bounding box
         ├── camera.h            # Camera & rendering loop
         ├── hittable.h          # Ray-object intersection interface
@@ -56,24 +60,27 @@ raytracer/
 
 ### Key Components
 
-**BVH Implementation (bvh.h):**
-- `bvh_node` class: Binary tree node containing AABB and left/right children
-- **Construction algorithm:** Recursive SAH-based (Surface Area Heuristic) partitioning
-  - Splits objects along longest axis of bounding box
-  - Uses `std::sort` to partition primitives
+**CPU BVH Implementation (src/bvh/bvh.h):**
+- **Status:** ✅ Complete and working
+- **Node structure:** `bvh_node {aabb bbox, int leftFirst, int primCount}` - flat array layout
+- **Construction algorithm:** Spatial median split (NOT SAH)
+  - Splits along longest axis at bbox midpoint
+  - In-place partitioning using swap
   - O(N log N) build time on CPU
-- **Structure:** Stores `shared_ptr<hittable>` for left/right children (can be leaf objects or internal nodes)
-- **Traversal:** Recursive ray-AABB intersection test, then recurse into children
+- **Storage:** Flat `pool` vector (size 2N-1), GPU-friendly structure
+- **Traversal:** Iterative using node indices (bvh.h:86-113)
+- **Features:** Statistics tracking, tree visualization, depth computation
 
 **AABB (aabb.h):**
 - Stores 3 intervals (x, y, z ranges)
 - `hit()` method: Ray-box intersection using slab method
 - `longest_axis()`: Returns index (0=x, 1=y, 2=z) of longest dimension
 
-**Main Rendering Loop (main.cc):**
-- Line 404: `switch(7)` statement selects which scene to render
-- Default: `cornell_box()` scene (600×600, 200 samples/pixel)
-- Scene functions create `hittable_list`, wrap in `bvh_node`, then call `cam.render(world)`
+**Main Rendering Loop (src/raytracer/main.cc):**
+- Line ~404: `switch(7)` statement selects which scene to render
+- Default: `cornell_box()` scene (100×100, 200 samples/pixel) - line 275
+- Scene functions create `hittable_list`, wrap in `bvh`, then call `cam.render(world_bvh)`
+- Cornell box scene prints tree structure and statistics
 
 **Important Note on Image Dependencies:**
 - Lines 119 and 365 reference `"earthmap.jpg"` which was removed during cleanup
@@ -81,21 +88,35 @@ raytracer/
 - Current scene (case 7: cornell_box) does NOT require images
 - If you get "Could not load image" errors, you're running the wrong scene or need to comment out those lines
 
-### Planned Structure (LBVH Implementation)
+**LBVH CPU Implementation (src/bvh/lbvh_cpu.h):**
+- **Status:** ⚠️ In progress - has compilation errors
+- **Completed components:**
+  - ✅ Morton code computation (lbvh_cpu.h:158-177) - 30-bit, 3D interleaved
+  - ✅ Radix sort implementation (lbvh_cpu.h:179-197) - LSB to MSB, stable
+  - ✅ Split list creation (lbvh_cpu.h:199-207) - finds first differing bit
+  - ✅ Bucket sort by level (lbvh_cpu.h:209-225) - O(n) sorting
+- **Issues/TODO:**
+  - ❌ Line 205: References undefined `level` (should be `first_diff_pos`)
+  - ❌ Line 71: `subdivide()` call has wrong parameters (takes 0, calls with 3)
+  - ❌ Lines 132-156: `subdivide()` implementation incomplete/broken
+  - ❌ Missing statistics tracking (references undefined `stats`)
+  - ❌ Line 134-135: `create_bbox()` returns void but assigned to bbox
+- **Algorithm:** Follows Lauterbach et al. paper - Morton codes → sort → split list → tree construction
 
-The LBVH implementation will add the following (based on project plan in ~/.claude/plans/nested-mapping-moore.md):
+**Morton Code Structure (src/bvh/morton.h):**
+- `struct morton_primitive {uint32_t morton_code, primitive_id;}`
+- 30-bit codes: 10 bits per dimension (x,y,z) interleaved
+- Sorted by Morton code to preserve spatial locality
+
+### Planned Future Components (GPU Implementation)
 
 ```
 src/
-├── TheNextWeek/           # Keep existing (CPU reference)
-├── bvh/
-│   ├── lbvh_cpu.h/cpp    # CPU LBVH reference (Week 3)
-│   └── lbvh_gpu.h/cpp    # GPU LBVH implementation (Week 4)
-├── opencl/
+├── opencl/               # OpenCL infrastructure (not yet started)
 │   ├── cl_context.h/cpp  # OpenCL setup/management
 │   ├── cl_buffer.h/cpp   # GPU memory management
 │   └── cl_utils.h/cpp    # Error handling
-└── kernels/               # OpenCL kernel files (.cl)
+└── kernels/              # OpenCL kernel files (.cl)
     ├── morton_codes.cl   # Compute Morton codes
     ├── radix_sort.cl     # Parallel sorting (or use library)
     ├── build_tree.cl     # LBVH tree construction (CORE)
@@ -120,18 +141,36 @@ src/
 
 ## Development Workflow
 
-### Current Phase: Week 1 (Setup & Learning)
+### Current Phase: Week 2-3 (CPU LBVH Implementation)
 
 **Completed:**
 - ✅ Cleaned up starter code (removed unused books, images)
-- ✅ Modified CMakeLists.txt to only build TheNextWeek
+- ✅ Modified CMakeLists.txt to build ray tracer
 - ✅ Built and verified ray tracer works
+- ✅ Studied BVH implementation (spatial median split, flat array)
+- ✅ Implemented Morton code computation (30-bit, 3D interleaved)
+- ✅ Implemented radix sort for Morton codes (LSB→MSB)
+- ✅ Implemented split list creation (finds first differing bits)
+- ✅ Implemented bucket sort by tree level (O(n) sorting)
+- ✅ Understood LBVH paper algorithm (split lists, tree construction)
 
-**Remaining Week 1 Tasks:**
-- [ ] Study Peter Shirley's BVH implementation (bvh.h) thoroughly
-- [ ] Benchmark CPU BVH build time (baseline for comparison)
+**Current Tasks:**
+- [ ] Fix compilation errors in lbvh_cpu.h:
+  - [ ] Fix line 205: undefined `level` variable
+  - [ ] Fix line 71: `subdivide()` parameter mismatch
+  - [ ] Complete `subdivide()` tree construction logic (lines 132-156)
+  - [ ] Add statistics tracking (like bvh.h)
+  - [ ] Fix bbox creation return type issue
+- [ ] Implement tree construction from sorted split list
+- [ ] Test LBVH with cornell_box scene
+- [ ] Compare build times: CPU BVH vs CPU LBVH
+- [ ] Validate tree correctness (rendering should match)
+
+**Future Tasks (Weeks 4-6):**
 - [ ] Install ROCm/OpenCL SDK for AMD GPU
-- [ ] Write simple test OpenCL kernel to verify GPU works
+- [ ] Implement GPU LBVH in OpenCL
+- [ ] Write OpenCL kernels (Morton codes, radix sort, tree build)
+- [ ] Benchmark GPU vs CPU build times
 
 ### Important Notes for Future Work
 
@@ -142,11 +181,22 @@ src/
 4. **Test incrementally:** Validate each stage (Morton codes, sort, tree build, bounds) before moving to next
 5. **Use simple scenes first:** Test with cornell_box or bouncing_spheres before large scenes
 
-**Morton Code Implementation (from plan):**
-- 30-bit code: 10 bits per dimension (x, y, z)
-- Bit interleaving: x|y|z|x|y|z|... pattern
-- Normalize primitive centroids to [0, 1] before encoding
-- Handle duplicate Morton codes with tie-breaking using primitive IDs
+**Morton Code Implementation:**
+- **30-bit code:** 10 bits per dimension (x, y, z) - `k=10`, so `3k=30`
+- **Bit interleaving:** x|y|z|x|y|z|... pattern (space-filling curve)
+- **Normalization:** Primitive centroids normalized to [0, cell_count) where cell_count = 2^k = 1024
+- **Formula:** For bit position calculation, use `31 - __builtin_clz(diff)` not `29 - __builtin_clz(diff)`
+- **Handles duplicates:** primitive_id used as tie-breaker
+
+**Split List Algorithm (Key Insights):**
+- **Purpose:** Determines where to partition primitive sequence at each tree level
+- **Creation:** For each adjacent pair (i, i+1) in sorted Morton sequence:
+  - XOR their Morton codes to find differing bits
+  - Find first (most significant) differing bit: `first_diff = 31 - __builtin_clz(xor_result)`
+  - Record split: `(i, first_diff)` - just the FIRST diff, not all levels from h to 3k
+- **Optimization:** Paper describes adding splits from h to 3k (redundant), but you only need the first diff
+- **Sorting:** Use bucket sort O(n) since levels are in small range [0, 30]
+- **Usage:** After sorting by level, splits tell you where to partition at each tree depth
 
 **Memory Management:**
 - OpenCL requires explicit CPU↔GPU memory transfers
@@ -157,6 +207,25 @@ src/
 - `cornell_box()`: 32 triangles, sanity check
 - `bouncing_spheres()`: ~400 spheres, medium complexity
 - For stress testing: Generate scenes with 100K+ primitives
+
+## C++ Implementation Notes
+
+**Using std::pair:**
+```cpp
+std::pair<int, int> split;  // (index, level)
+int index = split.first;    // Access first element
+int level = split.second;   // Access second element
+
+// Creation:
+split_list.push_back({3, 2});  // Brace initialization
+
+// C++17 structured bindings:
+for (const auto& [idx, lvl] : split_list) {
+    // Use idx and lvl directly
+}
+```
+
+**Important:** `.first` and `.second` are member variables, not functions (no parentheses!)
 
 ## Common Issues
 

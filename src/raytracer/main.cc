@@ -11,7 +11,7 @@
 
 #include "rtweekend.h"
 
-#include "../bvh/bvh.h"
+#include "../bvh/lbvh_cpu.h"
 #include "camera.h"
 #include "constant_medium.h"
 #include "hittable.h"
@@ -20,6 +20,8 @@
 #include "quad.h"
 #include "sphere.h"
 #include "texture.h"
+
+#include <chrono>
 
 
 void bouncing_spheres() {
@@ -82,7 +84,7 @@ void bouncing_spheres() {
     cam.defocus_angle = 0.6;
     cam.focus_dist    = 10.0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -110,7 +112,7 @@ void checkered_spheres() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -138,7 +140,7 @@ void earth() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -165,7 +167,7 @@ void perlin_spheres() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
 
     world_bvh.enable_statistics();
 
@@ -208,7 +210,7 @@ void quads() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -239,7 +241,7 @@ void simple_light() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -284,16 +286,29 @@ void cornell_box() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
 
-    // Print BVH tree structure (limit depth to 5 for readability)
+    // Print BVH tree structure
     world_bvh.print_tree(15);
-    std::clog << "\nTree depth: " << world_bvh.get_tree_depth() << "\n";
+    std::clog << "\nTree depth: " << world_bvh.get_tree_depth() << "\n\n";
 
     // Enable BVH statistics tracking
-    world_bvh.disable_statistics();
+    world_bvh.enable_statistics();
+
+    // Start render timing
+    auto render_start = std::chrono::high_resolution_clock::now();
 
     cam.render(world_bvh);
+
+    // End render timing
+    auto render_end = std::chrono::high_resolution_clock::now();
+    double render_time_ms = std::chrono::duration<double, std::milli>(render_end - render_start).count();
+
+    // Print timing results
+    std::clog << "\n=== Performance ===\n";
+    std::clog << "BVH construction time: " << world_bvh.get_construction_time() << " ms\n";
+    std::clog << "Rendering time: " << render_time_ms << " ms\n";
+    std::clog << "Total time: " << (world_bvh.get_construction_time() + render_time_ms) << " ms\n";
 
     // Print BVH statistics
     world_bvh.get_stats().print();
@@ -341,7 +356,7 @@ void cornell_smoke() {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -425,13 +440,13 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
 
     cam.defocus_angle = 0;
 
-    bvh world_bvh(world.objects);
+    lbvh_cpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
 
 int main() {
-    switch (4) {
+    switch (7) {
         case 1:  bouncing_spheres();          break;
         case 2:  checkered_spheres();         break;
         case 3:  earth();                     break;
