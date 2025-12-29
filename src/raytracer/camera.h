@@ -13,7 +13,7 @@
 
 #include "hittable.h"
 #include "material.h"
-#include "../bvh/lbvh_cpu.h"
+#include "../bvh/lbvh_gpu.h"
 
 class camera {
   public:
@@ -31,7 +31,7 @@ class camera {
     double defocus_angle = 0;  // Variation angle of rays through each pixel
     double focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
 
-    void render(const lbvh_cpu& world) {
+    void render(const lbvh_gpu& world) {
         initialize();
 
         std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
@@ -132,7 +132,7 @@ class camera {
         return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
     }
 
-    color ray_color(const ray& r, int depth, const lbvh_cpu& world) const {
+    color ray_color(const ray& r, int depth, const lbvh_gpu& world) const {
         // If we've exceeded the ray bounce limit, no more light is gathered.
         if (depth <= 0)
             return color(0,0,0);

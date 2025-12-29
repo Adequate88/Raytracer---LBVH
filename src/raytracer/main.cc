@@ -11,7 +11,7 @@
 
 #include "rtweekend.h"
 
-#include "../bvh/lbvh_cpu.h"
+#include "../bvh/lbvh_gpu.h"
 #include "camera.h"
 #include "constant_medium.h"
 #include "hittable.h"
@@ -84,7 +84,7 @@ void bouncing_spheres() {
     cam.defocus_angle = 0.6;
     cam.focus_dist    = 10.0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -112,7 +112,7 @@ void checkered_spheres() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -140,7 +140,7 @@ void earth() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -167,7 +167,7 @@ void perlin_spheres() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
 
     world_bvh.enable_statistics();
 
@@ -210,7 +210,7 @@ void quads() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -241,7 +241,7 @@ void simple_light() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -286,7 +286,7 @@ void cornell_box() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
 
     // Print BVH tree structure
     world_bvh.print_tree(15);
@@ -356,7 +356,7 @@ void cornell_smoke() {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
@@ -440,7 +440,7 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
 
     cam.defocus_angle = 0;
 
-    lbvh_cpu world_bvh(world.objects);
+    lbvh_gpu world_bvh(world.objects);
     cam.render(world_bvh);
 }
 
