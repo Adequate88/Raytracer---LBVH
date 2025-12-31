@@ -72,5 +72,11 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     add_compile_options(-Wunused-variable) # Variable is defined but unused
 endif()
 
+# Find OpenCL
+find_package(OpenCL REQUIRED)
+
 # Executables
 add_executable(theNextWeek ${EXTERNAL} ${BVH_SOURCES} ${RAYTRACER_SOURCES})
+
+# Link OpenCL library
+target_link_libraries(theNextWeek OpenCL::OpenCL)

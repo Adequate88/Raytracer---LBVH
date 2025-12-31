@@ -11,7 +11,7 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
-#include "../raytracer/aabb.h"
+#include "../raytracer/aabb_refactored.h"
 #include "../raytracer/hittable.h"
 #include "../raytracer/hittable_list.h"
 
@@ -171,7 +171,7 @@ class bvh {
 
       // Get notable values
       int axis = node.bbox.longest_axis();
-      float mid_point = node.bbox.axis_interval(axis).midpoint();
+      float mid_point = (node.bbox.axis_min(axis) + node.bbox.axis_max(axis)) / 2.0;
 
       // Define while loop counters
       int i = objects_start;
@@ -230,8 +230,8 @@ class bvh {
         }
 
         // Print bounding box info
-        std::clog << " bbox=[(" << node.bbox.x.min << "," << node.bbox.y.min << "," << node.bbox.z.min << ")";
-        std::clog << " - (" << node.bbox.x.max << "," << node.bbox.y.max << "," << node.bbox.z.max << ")]";
+        std::clog << " bbox=[(" << node.bbox.min_x << "," << node.bbox.min_y << "," << node.bbox.min_z << ")";
+        std::clog << " - (" << node.bbox.max_x << "," << node.bbox.max_y << "," << node.bbox.max_z << ")]";
         std::clog << "\n";
 
         // Recurse to children if internal node

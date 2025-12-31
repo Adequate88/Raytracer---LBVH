@@ -14,9 +14,7 @@ typedef struct {
   int primitive_id;
 } morton_primitive;
 
-typedef struct {
-  int x, y;
-} int2;
+// Note: int2 is a built-in OpenCL vector type, no need to define it
 
 typedef struct {
     aabb bbox;
@@ -139,17 +137,37 @@ __kernel void compute_morton(
   
 }
 
+__kernel void init_leaf_nodes (
+  __global const morton_primitive* morton_list,
+  __global const aabb* primitive_bboxes,
+  int N,
+  __global lbvh_node* nodes
+  ) {
+
+  int i = get_global_id(0);
+  
+  if (i >= N) return;
+
+  int leaf_idx = N - 1 + i;
+  int prim_id = morton_list[i].primitive_id;
+
+  nodes[leaf_idx].bbox = primitive_bboxes[prim_id];
+  nodes[leaf_idx].primitive_id = prim_id;
+  nodes[leaf_idx].parent = -1;  
+  nodes[leaf_idx].left = -1;
+  nodes[leaf_idx].right = -1;
+}
+
 __kernel void create_hierarchy(
   __global const morton_primitive* morton_list,
   int N,
   __global lbvh_node* nodes
   ) {
 
-  int i = get_global_id(0);
-  if (i >= N -1)
-    return;
+  int node_idx = get_global_id(0);
+  if (node_idx >= N -1) return;
 
-  int2 range = find_range(i, morton_list, N);
+  int2 range = find_range(node_idx, morton_list, N);
   int start = range.x;
   int end = range.y;
   // Get split idx
@@ -170,10 +188,19 @@ __kernel void create_hierarchy(
     right_node = split + 1 ;
   }
 
-  nodes[i].left = left_node;
-  nodes[i].right = right_node;
+  nodes[node_idx].left = left_node;
+  nodes[node_idx].right = right_node;
+  nodes[node_idx].primitive_id = -1;  // Internal nodes have no primitive
 
-  nodes[left_node].parent = i;
-  nodes[right_node].parent = i;
+  // Initialize bbox to empty (min > max) so bottom_up_bbox_build knows it needs processing
+  nodes[node_idx].bbox.min_x = INFINITY;
+  nodes[node_idx].bbox.max_x = -INFINITY;
+  nodes[node_idx].bbox.min_y = INFINITY;
+  nodes[node_idx].bbox.max_y = -INFINITY;
+  nodes[node_idx].bbox.min_z = INFINITY;
+  nodes[node_idx].bbox.max_z = -INFINITY;
+
+  nodes[left_node].parent = node_idx;
+  nodes[right_node].parent = node_idx;
   
 }

@@ -13,7 +13,7 @@
 
 #include "morton.h"
 #include "bvh.h"
-#include "../raytracer/aabb.h"
+#include "../raytracer/aabb_refactored.h"
 #include "../raytracer/hittable.h"
 #include "../raytracer/hittable_list.h"
 

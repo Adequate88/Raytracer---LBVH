@@ -11,7 +11,7 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
-#include "aabb.h"
+#include "aabb_refactored.h"
 #include "hittable.h"
 
 #include <vector>
@@ -31,9 +31,9 @@ class hittable_list : public hittable {
         bbox = aabb(bbox, object->bounding_box());
         // Update centroid to be the center of the bounding box
         centroid = point3(
-            bbox.x.midpoint(),
-            bbox.y.midpoint(),
-            bbox.z.midpoint()
+            (bbox.min_x + bbox.max_x) / 2.0,
+            (bbox.min_y + bbox.max_y) / 2.0,
+            (bbox.min_z + bbox.max_z) / 2.0
         );
     }
 

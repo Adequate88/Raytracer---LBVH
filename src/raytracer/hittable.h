@@ -11,7 +11,7 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
-#include "aabb.h"
+#include "aabb_refactored.h"
 
 
 class material;
@@ -98,9 +98,9 @@ class rotate_y : public hittable {
         for (int i = 0; i < 2; i++) {
             for (int j = 0; j < 2; j++) {
                 for (int k = 0; k < 2; k++) {
-                    auto x = i*bbox.x.max + (1-i)*bbox.x.min;
-                    auto y = j*bbox.y.max + (1-j)*bbox.y.min;
-                    auto z = k*bbox.z.max + (1-k)*bbox.z.min;
+                    auto x = i*bbox.max_x + (1-i)*bbox.min_x;
+                    auto y = j*bbox.max_y + (1-j)*bbox.min_y;
+                    auto z = k*bbox.max_z + (1-k)*bbox.min_z;
 
                     auto newx =  cos_theta*x + sin_theta*z;
                     auto newz = -sin_theta*x + cos_theta*z;

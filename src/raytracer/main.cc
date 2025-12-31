@@ -307,6 +307,11 @@ void cornell_box() {
     // Print timing results
     std::clog << "\n=== Performance ===\n";
     std::clog << "BVH construction time: " << world_bvh.get_construction_time() << " ms\n";
+    std::clog << "  - OpenCL initialization: " << world_bvh.get_opencl_init_time() << " ms\n";
+    std::clog << "  - Morton code computation: " << world_bvh.get_morton_time() << " ms\n";
+    std::clog << "  - Radix sort: " << world_bvh.get_sort_time() << " ms\n";
+    std::clog << "  - Hierarchy construction: " << world_bvh.get_hierarchy_time() << " ms\n";
+    std::clog << "  - Bounding box propagation: " << world_bvh.get_bbox_time() << " ms\n";
     std::clog << "Rendering time: " << render_time_ms << " ms\n";
     std::clog << "Total time: " << (world_bvh.get_construction_time() + render_time_ms) << " ms\n";
 

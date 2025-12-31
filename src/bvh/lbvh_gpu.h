@@ -13,7 +13,7 @@
 
 #include "morton.h"
 #include "bvh.h"
-#include "../raytracer/aabb.h"
+#include "../raytracer/aabb_refactored.h"
 #include "../raytracer/hittable.h"
 #include "../raytracer/hittable_list.h"
 
@@ -22,7 +22,13 @@
 #include <cstdint>
 #include <chrono>
 #include <fstream>
+#include <iostream>
+#include <sstream>
+
 #include <queue>
+
+#define CL_TARGET_OPENCL_VERSION 120
+#include <CL/cl.h>
 
 struct int2 {
   int x, y;
@@ -33,45 +39,51 @@ struct int2 {
 
 struct lbvh_node {
     aabb bbox;
-    lbvh_node* left;
-    lbvh_node* right;
-    lbvh_node* parent;
+    int left;
+    int right;
+    int parent;
     int primitive_id;  // -1 for internal nodes, >=0 for leaf nodes
 
     // Default constructor
     lbvh_node()
-        : left(nullptr), right(nullptr), parent(nullptr), primitive_id(-1) {}
+        : left(-1), right(-1), parent(-1), primitive_id(-1) {}
 
     // Leaf constructor
     lbvh_node(const aabb& bbox, int prim_id)
-        : bbox(bbox), left(nullptr), right(nullptr), parent(nullptr), primitive_id(prim_id) {}
+        : bbox(bbox), left(-1), right(-1), parent(-1), primitive_id(prim_id) {}
 
     // Internal constructor
-    lbvh_node(lbvh_node* l, lbvh_node* r)
-        : left(l), right(r), parent(nullptr), primitive_id(-1) {
-        bbox = aabb(left->bbox, right->bbox);
-    }
+    lbvh_node(int l, int r)
+        : left(l), right(r), parent(-1), primitive_id(-1) {}
 
     bool is_leaf() const { return primitive_id >= 0; }
 };
 
 class lbvh_gpu {
   public:
+    ~lbvh_gpu() {
+      cleanup_opencl();
+    }
+
     lbvh_gpu(std::vector<shared_ptr<hittable>>& objects)
         : objects(objects), N(objects.size()) {
 
         // Pre-allocate arrays
-        internal_nodes.resize(N - 1);  // N-1 internal nodes
-        leaf_nodes.resize(N);           // N leaf nodes
+        nodes.resize(2*N - 1);   
 
         // Start timing
         auto start_time = std::chrono::high_resolution_clock::now();
 
         // Edge case: empty scene
         if (N == 0) {
-            root = nullptr;
             return;
         }
+
+        // Phase 1: OpenCL initialization
+        auto phase_start = std::chrono::high_resolution_clock::now();
+        init_opencl();
+        auto phase_end = std::chrono::high_resolution_clock::now();
+        opencl_init_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
 
         // LBVH setup
         morton_list.resize(N);
@@ -81,29 +93,112 @@ class lbvh_gpu {
         temp_scene_bbox = aabb::empty;
         for (int i = 0; i < N; i++) {
             temp_scene_bbox = aabb(temp_scene_bbox, objects[i]->bounding_box());
+            primitive_bboxes.push_back(objects[i]->bounding_box());
+            centroids.push_back(objects[i]->get_centroid());
         }
 
-        // Compute Morton codes for all primitives
-        for (int i = 0; i < N; i++) {
-            morton_list[i].morton_code = compute_morton(objects[i]->get_centroid());
-            morton_list[i].primitive_id = i;
-        }
+        // Allocating buffers
+        cl_int err;
 
-        // Sort by Morton code
+        buf_centroids = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                 N * sizeof(point3), centroids.data(), &err);
+        check_cl_error(err, "clCreateBuffer(buf_centroids)");
+
+        buf_bboxes = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                                        N * sizeof(aabb), primitive_bboxes.data(), &err);
+        check_cl_error(err, "clCreateBuffer(buf_bboxes)");
+
+        buf_morton_list = clCreateBuffer(context, CL_MEM_READ_WRITE,
+                                   N * sizeof(morton_primitive), nullptr, &err);
+        check_cl_error(err, "clCreateBuffer(buf_morton_list)");
+
+        buf_nodes = clCreateBuffer(context, CL_MEM_READ_WRITE,
+                             (2*N - 1) * sizeof(lbvh_node), nullptr, &err);
+        check_cl_error(err, "clCreateBuffer(buf_nodes)");
+
+        // Phase 2: Morton code computation
+        phase_start = std::chrono::high_resolution_clock::now();
+
+        // Set kernel arguments for compute_morton
+        err = clSetKernelArg(kernel_morton, 0, sizeof(cl_mem), &buf_centroids);
+        err |= clSetKernelArg(kernel_morton, 1, sizeof(aabb), &temp_scene_bbox);
+        err |= clSetKernelArg(kernel_morton, 2, sizeof(int), &N);
+        err |= clSetKernelArg(kernel_morton, 3, sizeof(uint32_t), &cell_count);
+        err |= clSetKernelArg(kernel_morton, 4, sizeof(uint32_t), &k);
+        err |= clSetKernelArg(kernel_morton, 5, sizeof(cl_mem), &buf_morton_list);
+        check_cl_error(err, "clSetKernelArg(kernel_morton)");
+
+        // Launch kernel
+        size_t global_work_size = N;
+        err = clEnqueueNDRangeKernel(queue, kernel_morton, 1, nullptr,
+                               &global_work_size, nullptr, 0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueNDRangeKernel(kernel_morton)");
+
+        // Wait for completion
+        clFinish(queue);
+
+        // Read morton codes back to CPU
+        err = clEnqueueReadBuffer(queue, buf_morton_list, CL_TRUE, 0,
+                            N * sizeof(morton_primitive), morton_list.data(),
+                            0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueReadBuffer(buf_morton_list)");
+
+        phase_end = std::chrono::high_resolution_clock::now();
+        morton_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+
+        // Phase 3: Sort by Morton code
+        phase_start = std::chrono::high_resolution_clock::now();
         radix_sort();
+        phase_end = std::chrono::high_resolution_clock::now();
+        sort_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
 
-        // Initialize leaf nodes with sorted primitives
-        for (int i = 0; i < N; i++) {
-            morton_primitive morton_object = morton_list[i];
-            leaf_nodes[i].bbox = objects[morton_object.primitive_id]->bounding_box();
-            leaf_nodes[i].primitive_id = morton_object.primitive_id;
-            leaf_nodes[i].parent = nullptr;  // Will be set during tree construction
-        }
+        // Update GPU buffer with sorted morton codes
+        err = clEnqueueWriteBuffer(queue, buf_morton_list, CL_TRUE, 0,
+                             N * sizeof(morton_primitive), morton_list.data(),
+                             0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueWriteBuffer(buf_morton_list after sort)");
 
-        // Build tree recursively
-        root = subdivide();
+        // Phase 4: Hierarchy construction (tree building)
+        phase_start = std::chrono::high_resolution_clock::now();
 
+        // Set kernel arguments for init_leaf_nodes
+        err = clSetKernelArg(kernel_init_leaves, 0, sizeof(cl_mem), &buf_morton_list);
+        err |= clSetKernelArg(kernel_init_leaves, 1, sizeof(cl_mem), &buf_bboxes);
+        err |= clSetKernelArg(kernel_init_leaves, 2, sizeof(int), &N);
+        err |= clSetKernelArg(kernel_init_leaves, 3, sizeof(cl_mem), &buf_nodes);
+        check_cl_error(err, "clSetKernelArg(kernel_init_leaves)");
+
+        err = clEnqueueNDRangeKernel(queue, kernel_init_leaves, 1, nullptr,
+                               &global_work_size, nullptr, 0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueNDRangeKernel(kernel_init_leaves)");
+        clFinish(queue);
+
+        // Set kernel arguments for create_hierarchy
+        err = clSetKernelArg(kernel_hierarchy, 0, sizeof(cl_mem), &buf_morton_list);
+        err |= clSetKernelArg(kernel_hierarchy, 1, sizeof(int), &N);
+        err |= clSetKernelArg(kernel_hierarchy, 2, sizeof(cl_mem), &buf_nodes);
+        check_cl_error(err, "clSetKernelArg(kernel_hierarchy)");
+        
+        size_t hierarchy_work_size = N - 1;
+        err = clEnqueueNDRangeKernel(queue, kernel_hierarchy, 1, nullptr,
+                                     &hierarchy_work_size, nullptr, 0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueNDRangeKernel(kernel_hierarchy)");
+        clFinish(queue);
+
+        // Read nodes back to CPU
+        err = clEnqueueReadBuffer(queue, buf_nodes, CL_TRUE, 0,
+                                  (2*N - 1) * sizeof(lbvh_node), nodes.data(),
+                                  0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueReadBuffer(buf_nodes)");
+
+        phase_end = std::chrono::high_resolution_clock::now();
+        hierarchy_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+
+        // Phase 5: Bottom-up bounding box propagation
+        phase_start = std::chrono::high_resolution_clock::now();
         bottom_up_bbox_build();
+        phase_end = std::chrono::high_resolution_clock::now();
+        bbox_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
 
         // End timing
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -112,8 +207,7 @@ class lbvh_gpu {
 
     // Entry point for ray intersection
     bool hit(const ray& r, interval ray_t, hit_record& rec) const {
-        if (!root) return false;
-        return hit_recursive(r, ray_t, rec, root);
+        return hit_recursive(r, ray_t, rec, 0);
     }
 
     // Statistics methods
@@ -124,6 +218,11 @@ class lbvh_gpu {
 
     // Timing methods
     double get_construction_time() const { return construction_time_ms; }
+    double get_opencl_init_time() const { return opencl_init_time_ms; }
+    double get_morton_time() const { return morton_time_ms; }
+    double get_sort_time() const { return sort_time_ms; }
+    double get_hierarchy_time() const { return hierarchy_time_ms; }
+    double get_bbox_time() const { return bbox_time_ms; }
 
     // Tree visualization
     void print_tree(int max_depth = 10) const {
@@ -131,23 +230,44 @@ class lbvh_gpu {
         std::clog << "Total primitives: " << N << "\n";
         std::clog << "Tree depth limit for display: " << max_depth << "\n";
         std::clog << "\nTree structure:\n";
-        print_node_recursive(root, 0, max_depth);
+        print_node_recursive(0, 0, max_depth);
         std::clog << "===========================\n";
     }
 
     int get_tree_depth() const {
-        return compute_depth(root);
+        return compute_depth(0);
     }
 
   private:
+    // OpenCL member variables
+    cl_platform_id platform = nullptr;
+    cl_device_id device = nullptr;
+    cl_context context = nullptr;
+    cl_command_queue queue = nullptr;
+    cl_program program = nullptr;
+
+    // Kernels
+    cl_kernel kernel_morton = nullptr;
+    cl_kernel kernel_init_leaves = nullptr;
+    cl_kernel kernel_hierarchy = nullptr;
+
+    // Memory Buffers
+
+    cl_mem buf_centroids = nullptr;
+    cl_mem buf_morton_list = nullptr;
+    cl_mem buf_bboxes = nullptr;
+    cl_mem buf_nodes = nullptr;
+
+    // Class Member Variables
     int N = 0; // Size of object list
 
     // Data members
-    lbvh_node* root;                         // Pointer to root (points into internal_nodes)
-    std::vector<lbvh_node> internal_nodes;   // N-1 internal nodes
-    std::vector<lbvh_node> leaf_nodes;       // N leaf nodes
+    std::vector<lbvh_node> nodes; // [0, N-2] are internal, [N-1, 2N - 2] are leaves
 
     std::vector<shared_ptr<hittable>>& objects;
+    std::vector<aabb> primitive_bboxes;
+    std::vector<point3> centroids;
+
     aabb temp_scene_bbox;  // Temporary storage for Morton code computation
 
     // LBVH Construction Variables
@@ -162,200 +282,74 @@ class lbvh_gpu {
     // Construction time tracking
     double construction_time_ms = 0.0;
 
+    // Phase-specific timing
+    double opencl_init_time_ms = 0.0;
+    double morton_time_ms = 0.0;
+    double sort_time_ms = 0.0;
+    double hierarchy_time_ms = 0.0;
+    double bbox_time_ms = 0.0;
+
     // Private recursive hit function
-    bool hit_recursive(const ray& r, interval ray_t, hit_record& rec, const lbvh_node* node) const {
-        if (!node) return false;
+    bool hit_recursive(const ray& r, interval ray_t, hit_record& rec, const int node_idx) const {
+        if (node_idx >= 2*N - 1 || node_idx < 0) return false;
 
         // Track node visit
         if (enable_stats) stats.node_visits++;
 
+        const lbvh_node& node = nodes[node_idx];
         // Test bounding box
-        if (!node->bbox.hit(r, ray_t))
+        if (!node.bbox.hit(r, ray_t))
             return false;
 
         // Is primitive (leaf node)
-        if (node->is_leaf()) {
+        if (node.is_leaf()) {
             if (enable_stats) stats.primitive_tests++;
-            return objects[node->primitive_id]->hit(r, ray_t, rec);
+            return objects[node.primitive_id]->hit(r, ray_t, rec);
         }
 
         // Recurse children (internal node)
-        bool hit_left = hit_recursive(r, ray_t, rec, node->left);
+        bool hit_left = hit_recursive(r, ray_t, rec, node.left);
         bool hit_right = hit_recursive(r, interval(ray_t.min, hit_left ? rec.t : ray_t.max),
-                                       rec, node->right);
+                                       rec, node.right);
         return hit_left || hit_right;
     }
 
-    lbvh_node* subdivide() {      
-
-      for (int i = 0; i < N-1; i++) {
-
-        int2 range = find_range(i);
-        int start = range.x;
-        int end = range.y;
-        // Get split idx
-        int split = find_split(start, end);
-
-        // Assign children
-        lbvh_node* left_node;
-        if (split == start) { // Is leaf
-          left_node = &leaf_nodes[split];
-        } else {
-          left_node = &internal_nodes[split];
-        }
-
-        lbvh_node* right_node;
-        if (split + 1 == end) { // Is leaf
-          right_node = &leaf_nodes[split + 1];
-        } else {
-          right_node = &internal_nodes[split + 1];
-        }
-
-        internal_nodes[i].left = left_node;
-        internal_nodes[i].right = right_node;
-        left_node->parent = &internal_nodes[i];
-        right_node->parent = &internal_nodes[i];
-
-      }
-      return &internal_nodes[0];
-    }
-
     void bottom_up_bbox_build() {
-      std::queue<lbvh_node*> q;
+      std::queue<int> q;
 
-      for (const auto& leaf : leaf_nodes) {
-        if (leaf.parent != nullptr)
-          q.push(leaf.parent);
+      for (int i = 0; i < N; i++) {
+        int leaf_idx = N - 1 + i;
+        if (nodes[leaf_idx].parent != -1) q.push(nodes[leaf_idx].parent);
       }
 
       while (!q.empty()) {
-        lbvh_node* current_node = q.front();
+        int current_node_idx = q.front();
         q.pop();
 
+        lbvh_node& current_node = nodes[current_node_idx];
+
         // Skip if already processed (bbox has been set to non-empty)
-        if (current_node->bbox.x.min <= current_node->bbox.x.max)
+        if (current_node.bbox.min_x <= current_node.bbox.max_x)
           continue;
 
-        lbvh_node* left_child = current_node->left;
-        lbvh_node* right_child = current_node->right;
+        lbvh_node& left_child = nodes[current_node.left];
+        lbvh_node& right_child = nodes[current_node.right];
 
         // Check if both children have valid bboxes before computing parent bbox
-        bool left_ready = (left_child->bbox.x.min <= left_child->bbox.x.max);
-        bool right_ready = (right_child->bbox.x.min <= right_child->bbox.x.max);
+        bool left_ready = (left_child.bbox.min_x <= left_child.bbox.max_x);
+        bool right_ready = (right_child.bbox.min_x <= right_child.bbox.max_x);
 
         if (!left_ready || !right_ready) {
           // One or both children not ready yet, push back to queue and try later
-          q.push(current_node);
+          q.push(current_node_idx);
           continue;
         }
 
-        current_node->bbox = aabb(left_child->bbox, right_child->bbox);
+        current_node.bbox = aabb(left_child.bbox, right_child.bbox);
 
-        if (current_node->parent != nullptr)
-          q.push(current_node->parent);
+        if (current_node.parent != -1)
+          q.push(current_node.parent);
       }
-    }
-
-    int2 find_range(int idx) {
-      // TODO implement algorithm from Karras
-      // Find direction using neighbors
-      
-      int dir = (delta(idx, idx + 1) - delta(idx, idx - 1)) > 0 ? 1 : -1; // If positive return 1, otherwise -1
-
-
-      // Get minimum bound at i - d
-      int min_bound = delta(idx, idx - dir);
-     
-      
-      // Get Lmax bound of range
-      int l_max = 2; // Initial max bound;
-      while (delta(idx, idx + dir*l_max) > min_bound)
-        l_max *= 2; 
-      
-
-      // Binary search for end range
-      int l = 0; // Find distance to end range 
-
-      for (int t = l_max / 2; t >= 1; t /= 2) {
-                
-        if (delta(idx, idx + (t + l)*dir) > min_bound) {
-          l += t;
-        }
-      }
-      
-      int final_point = idx + l*dir;
-      
-      int2 range;
-      if ( final_point > idx) {
-        range = int2(idx, final_point);
-      } else {
-        range = int2(final_point, idx);
-      }
-
-      return range;
-    }
-
-    int delta(int i, int j) {
-      if (j < 0 || j >= N) return -1;
-
-      uint32_t code_i = morton_list[i].morton_code;
-      uint32_t code_j = morton_list[j].morton_code;
-
-      return __builtin_clz(code_i ^ code_j);
-    }
-    
-    // TODO move this function somewhere smarter in codebase
-    int sign(int x) {
-      if (x > 0) return 1;
-      if (x < 0) return -1;
-      return 0;
-    }
-    int find_split(int start, int end) {
-        uint32_t start_morton = morton_list[start].morton_code;
-        uint32_t end_morton = morton_list[end].morton_code;
-
-        if (start_morton == end_morton)
-            return (start + end) >> 1;
-
-        int common_bits = __builtin_clz(start_morton ^ end_morton);
-
-        int step = (end - start);
-        int current_split = start;
-
-        do {
-            step = (step + 1) >> 1;
-            int new_split = current_split + step;
-
-            if (new_split < end) {
-                uint32_t split_morton = morton_list[new_split].morton_code;
-                int split_msd = __builtin_clz(start_morton ^ split_morton);
-
-                if (split_msd > common_bits)
-                    current_split = new_split;
-            }
-        } while (step > 1);
-
-        return current_split;
-    }
-
-    uint32_t compute_morton(point3 barycenter) {
-        // Compute cell of barycenter at each axis
-        float x_cell = cell_count * (barycenter[0] - temp_scene_bbox.x.min) / temp_scene_bbox.x.size();
-        float y_cell = cell_count * (barycenter[1] - temp_scene_bbox.y.min) / temp_scene_bbox.y.size();
-        float z_cell = cell_count * (barycenter[2] - temp_scene_bbox.z.min) / temp_scene_bbox.z.size();
-
-        uint32_t x = std::min(static_cast<uint32_t>(x_cell), cell_count - 1);
-        uint32_t y = std::min(static_cast<uint32_t>(y_cell), cell_count - 1);
-        uint32_t z = std::min(static_cast<uint32_t>(z_cell), cell_count - 1);
-
-        uint32_t morton_code = 0;
-        for (int i = 0; i < k; i++){
-            morton_code |= ( (x >> i) & 1 ) << (3 * i);
-            morton_code |= ( (y >> i) & 1 ) << (3 * i + 1);
-            morton_code |= ( (z >> i) & 1 ) << (3 * i + 2);
-        }
-
-        return morton_code;
     }
 
     void radix_sort() {
@@ -379,41 +373,123 @@ class lbvh_gpu {
     }
 
     // Helper method to print tree structure recursively
-    void print_node_recursive(const lbvh_node* node, int depth, int max_depth) const {
-        if (!node || depth > max_depth) return;
+    void print_node_recursive(int node_idx, int depth, int max_depth) const {
+        if (node_idx < 0 || depth > max_depth) return;
+
+        const lbvh_node& node = nodes[node_idx];
 
         // Indentation
         for (int i = 0; i < depth; i++) std::clog << "  ";
 
         // Node info
-        if (node->is_leaf()) {
-            std::clog << "LEAF [prim_id=" << node->primitive_id << "]";
+        if (node.is_leaf()) {
+            std::clog << "LEAF [prim_id=" << node.primitive_id << "]";
         } else {
             std::clog << "INTERNAL";
         }
 
         // Print bounding box info
-        std::clog << " bbox=[(" << node->bbox.x.min << "," << node->bbox.y.min << "," << node->bbox.z.min << ")";
-        std::clog << " - (" << node->bbox.x.max << "," << node->bbox.y.max << "," << node->bbox.z.max << ")]";
+        std::clog << " bbox=[(" << node.bbox.min_x << "," << node.bbox.min_y << "," << node.bbox.min_z << ")";
+        std::clog << " - (" << node.bbox.max_x << "," << node.bbox.max_y << "," << node.bbox.max_z << ")]";
         std::clog << "\n";
 
         // Recurse to children if internal node
-        if (!node->is_leaf()) {
-            print_node_recursive(node->left, depth + 1, max_depth);
-            print_node_recursive(node->right, depth + 1, max_depth);
+        if (!node.is_leaf()) {
+            print_node_recursive(node.left, depth + 1, max_depth);
+            print_node_recursive(node.right, depth + 1, max_depth);
         }
     }
 
     // Helper method to compute tree depth
-    int compute_depth(const lbvh_node* node) const {
-        if (!node) return 0;
-        if (node->is_leaf()) return 1;
+    int compute_depth(int node_idx) const {
+        if (node_idx < 0) return 0;
 
-        int left_depth = compute_depth(node->left);
-        int right_depth = compute_depth(node->right);
+        const lbvh_node& node = nodes[node_idx];
+        if (node.is_leaf()) return 1;
+
+        int left_depth = compute_depth(node.left);
+        int right_depth = compute_depth(node.right);
 
         return 1 + std::max(left_depth, right_depth);
     }
+
+    // OpenCL host functions
+    
+    void check_cl_error (cl_int err, const char* operation) {
+      if (err != CL_SUCCESS) {
+          std::cerr << "OpenCL error during " << operation << ": " << err << std::endl;
+          exit(1);
+      }
+    }
+
+    void init_opencl() {
+      cl_int err;
+
+      err = clGetPlatformIDs(1, &platform, nullptr);
+      check_cl_error(err, "clGetPlatformIDs");
+
+      err = clGetDeviceIDs(platform, CL_DEVICE_TYPE_GPU, 1, &device, nullptr);
+      check_cl_error(err, "clGetDeviceIDs");
+
+      context = clCreateContext(nullptr, 1, &device, nullptr, nullptr, &err);
+      check_cl_error(err, "clCreateContext");
+
+      queue = clCreateCommandQueue(context, device, 0, &err);
+      check_cl_error(err, "clCreateCommandQueue");
+
+      std::string source = load_kernel_source("src/bvh/lbvh_kernels.cl");
+      const char* src_ptr = source.c_str();
+      size_t src_len = source.length();
+
+      program = clCreateProgramWithSource(context, 1, &src_ptr, &src_len, &err);
+      check_cl_error(err, "clCreateProgramWithSource");
+
+      err = clBuildProgram(program, 1, &device, nullptr, nullptr, nullptr);
+
+      if (err != CL_SUCCESS) {
+        size_t log_size;
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &log_size);
+        std::vector<char> log(log_size);
+        clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log.data(), nullptr);
+        std::cerr << "OpenCL kernel compilation error:\n" << log.data() << std::endl;
+        exit(1);
+      }
+
+      kernel_morton = clCreateKernel(program, "compute_morton", &err);
+      check_cl_error(err, "clCreateKernel(compute_morton)");
+
+      kernel_init_leaves = clCreateKernel(program, "init_leaf_nodes", &err);
+      check_cl_error(err, "clCreateKernel(init_leaf_nodes)");
+
+      kernel_hierarchy = clCreateKernel(program, "create_hierarchy", &err);
+      check_cl_error(err, "clCreateKernel(create_hierarchy)");
+    }
+
+    void cleanup_opencl() {
+      if (kernel_morton) clReleaseKernel(kernel_morton);
+      if (kernel_init_leaves) clReleaseKernel(kernel_init_leaves);
+      if (kernel_hierarchy) clReleaseKernel(kernel_hierarchy);
+      if (buf_centroids) clReleaseMemObject(buf_centroids);
+      if (buf_morton_list) clReleaseMemObject(buf_morton_list);
+      if (buf_bboxes) clReleaseMemObject(buf_bboxes);
+      if (buf_nodes) clReleaseMemObject(buf_nodes);
+      if (program) clReleaseProgram(program);
+      if (queue) clReleaseCommandQueue(queue);
+      if (context) clReleaseContext(context);
+    }
+
+    std::string load_kernel_source(const char* filename) {
+      std::ifstream file(filename);
+      if (!file.is_open()) {
+          std::cerr << "Failed to open kernel file: " << filename << std::endl;
+          exit(1);
+      }
+      std::stringstream buffer;
+      buffer << file.rdbuf();
+      return buffer.str();
+    }
+
+
 };
 
 #endif
