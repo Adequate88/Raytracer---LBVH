@@ -17,6 +17,7 @@ set ( CMAKE_CXX_EXTENSIONS        OFF )
 
 set ( EXTERNAL
   src/external/stb_image.h
+  src/external/tinyobjloader.h
 )
 
 set ( BVH_SOURCES
@@ -33,6 +34,7 @@ set ( RAYTRACER_SOURCES
   src/raytracer/hittable_list.h
   src/raytracer/interval.h
   src/raytracer/material.h
+  src/raytracer/mesh.h
   src/raytracer/perlin.h
   src/raytracer/quad.h
   src/raytracer/ray.h
@@ -40,6 +42,7 @@ set ( RAYTRACER_SOURCES
   src/raytracer/rtweekend.h
   src/raytracer/sphere.h
   src/raytracer/texture.h
+  src/raytracer/triangle.h
   src/raytracer/vec3.h
 )
 

@@ -15,6 +15,11 @@
 #include "material.h"
 #include "../bvh/lbvh_gpu.h"
 
+#define USE_GPU_RENDERING  // Re-enabled for GPU triangle testing
+
+// Forward declare gpu_renderer (included at end of file after camera class is defined)
+class gpu_renderer;
+
 class camera {
   public:
     double aspect_ratio      = 1.0;  // Ratio of image width over height
@@ -31,26 +36,18 @@ class camera {
     double defocus_angle = 0;  // Variation angle of rays through each pixel
     double focus_dist = 10;    // Distance from camera lookfrom point to plane of perfect focus
 
-    void render(const lbvh_gpu& world) {
-        initialize();
+    void render(const lbvh_gpu& world);  // Implemented after class definition
 
-        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
-
-        for (int j = 0; j < image_height; j++) {
-            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
-            for (int i = 0; i < image_width; i++) {
-                color pixel_color(0,0,0);
-                for (int sample = 0; sample < samples_per_pixel; sample++) {
-                    ray r = get_ray(i, j);
-                    world.increment_ray_count();  // Track ray count if stats enabled
-                    pixel_color += ray_color(r, max_depth, world);
-                }
-                write_color(std::cout, pixel_samples_scale * pixel_color);
-            }
-        }
-
-        std::clog << "\rDone.                 \n";
-    }
+    int get_image_height() const { return image_height; }
+    point3 get_center() const { return center; }
+    point3 get_pixel00_loc() const { return pixel00_loc; }
+    vec3 get_pixel_delta_u() const { return pixel_delta_u; }
+    vec3 get_pixel_delta_v() const { return pixel_delta_v; }
+    int get_samples_per_pixel() const { return samples_per_pixel; }
+    int get_max_depth() const { return max_depth; }
+    vec3 get_defocus_disk_u() const { return defocus_disk_u; }
+    vec3 get_defocus_disk_v() const { return defocus_disk_v; }
+    double get_defocus_angle() const { return defocus_angle; }
 
   private:
     int    image_height;         // Rendered image height
@@ -156,5 +153,46 @@ class camera {
     }
 };
 
+// Include gpu_renderer after camera class is fully defined to avoid circular dependency
+#include "gpu_renderer.h"
+
+// Implement camera::render() after gpu_renderer is fully defined
+inline void camera::render(const lbvh_gpu& world) {
+    initialize();
+
+    #ifdef USE_GPU_RENDERING
+        std::clog << "Using GPU rendering\n";
+
+        // Create GPU renderer and render
+        gpu_renderer renderer(world);
+        std::vector<color> pixels;
+        renderer.render(*this, pixels);
+
+        // Output results
+        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+        for (const auto& pixel : pixels) {
+            write_color(std::cout, pixel);
+        }
+
+        std::clog << "\rDone.\n";
+    #else
+        std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+
+        for (int j = 0; j < image_height; j++) {
+            std::clog << "\rScanlines remaining: " << (image_height - j) << ' ' << std::flush;
+            for (int i = 0; i < image_width; i++) {
+                color pixel_color(0,0,0);
+                for (int sample = 0; sample < samples_per_pixel; sample++) {
+                    ray r = get_ray(i, j);
+                    world.increment_ray_count();  // Track ray count if stats enabled
+                    pixel_color += ray_color(r, max_depth, world);
+                }
+                write_color(std::cout, pixel_samples_scale * pixel_color);
+            }
+        }
+
+        std::clog << "\rDone.                 \n";
+    #endif
+}
 
 #endif

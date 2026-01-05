@@ -16,14 +16,17 @@
 #include "../raytracer/aabb_refactored.h"
 #include "../raytracer/hittable.h"
 #include "../raytracer/hittable_list.h"
+#include "../raytracer/sphere.h"
 
 #include <algorithm>
 #include <memory>
+#include <vector>
 #include <cstdint>
 #include <chrono>
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <map>
 
 #include <queue>
 
@@ -43,18 +46,19 @@ struct lbvh_node {
     int right;
     int parent;
     int primitive_id;  // -1 for internal nodes, >=0 for leaf nodes
+    int atomic_counter;
 
     // Default constructor
     lbvh_node()
-        : left(-1), right(-1), parent(-1), primitive_id(-1) {}
+        : left(-1), right(-1), parent(-1), primitive_id(-1), atomic_counter(0) {}
 
     // Leaf constructor
     lbvh_node(const aabb& bbox, int prim_id)
-        : bbox(bbox), left(-1), right(-1), parent(-1), primitive_id(prim_id) {}
+        : bbox(bbox), left(-1), right(-1), parent(-1), primitive_id(prim_id), atomic_counter(0) {}
 
     // Internal constructor
     lbvh_node(int l, int r)
-        : left(l), right(r), parent(-1), primitive_id(-1) {}
+        : left(l), right(r), parent(-1), primitive_id(-1), atomic_counter(0) {}
 
     bool is_leaf() const { return primitive_id >= 0; }
 };
@@ -196,7 +200,21 @@ class lbvh_gpu {
 
         // Phase 5: Bottom-up bounding box propagation
         phase_start = std::chrono::high_resolution_clock::now();
-        bottom_up_bbox_build();
+
+        err = clSetKernelArg(kernel_build_bboxes, 0, sizeof(cl_mem), &buf_nodes);
+        err |= clSetKernelArg(kernel_build_bboxes, 1, sizeof(int), &N);
+        check_cl_error(err, "clSetKernelArg(kernel_build_bboxes)");
+        
+        err = clEnqueueNDRangeKernel( queue, kernel_build_bboxes, 1,NULL, &global_work_size, NULL, 0, NULL, NULL);
+        check_cl_error(err, "clEnqueueNDRangeKernel(kernel_build_bboxes)");
+
+        clFinish(queue);
+        
+        err = clEnqueueReadBuffer(queue, buf_nodes, CL_TRUE, 0,
+                            (2*N - 1) * sizeof(lbvh_node), nodes.data(),
+                            0, nullptr, nullptr);
+        check_cl_error(err, "clEnqueueReadBuffer(buf_nodes after bbox)");
+
         phase_end = std::chrono::high_resolution_clock::now();
         bbox_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
 
@@ -238,6 +256,15 @@ class lbvh_gpu {
         return compute_depth(0);
     }
 
+    // GPU resource access (for GPU rendering integration)
+    cl_context get_opencl_context() const { return context; }
+    cl_device_id get_opencl_device() const { return device; }
+    cl_command_queue get_opencl_queue() const { return queue; }
+    cl_mem get_nodes_buffer() const { return buf_nodes; }
+    const std::vector<lbvh_node>& get_nodes() const { return nodes; }
+    int get_primitive_count() const { return N; }
+    const std::vector<shared_ptr<hittable>>& get_objects() const { return objects; }
+
   private:
     // OpenCL member variables
     cl_platform_id platform = nullptr;
@@ -250,46 +277,38 @@ class lbvh_gpu {
     cl_kernel kernel_morton = nullptr;
     cl_kernel kernel_init_leaves = nullptr;
     cl_kernel kernel_hierarchy = nullptr;
+    cl_kernel kernel_build_bboxes = nullptr;
 
     // Memory Buffers
-
     cl_mem buf_centroids = nullptr;
     cl_mem buf_morton_list = nullptr;
     cl_mem buf_bboxes = nullptr;
     cl_mem buf_nodes = nullptr;
 
-    // Class Member Variables
-    int N = 0; // Size of object list
+    int N = 0;
 
-    // Data members
-    std::vector<lbvh_node> nodes; // [0, N-2] are internal, [N-1, 2N - 2] are leaves
+    std::vector<lbvh_node> nodes;
 
     std::vector<shared_ptr<hittable>>& objects;
     std::vector<aabb> primitive_bboxes;
     std::vector<point3> centroids;
 
-    aabb temp_scene_bbox;  // Temporary storage for Morton code computation
+    aabb temp_scene_bbox;
 
-    // LBVH Construction Variables
     std::vector<morton_primitive> morton_list;
-    uint32_t k = 10; // Default at 10 for 30-bit Morton Codes (used for 2^k X 2^k X 2^k lattice)
+    uint32_t k = 10;
     uint32_t cell_count = 0;
 
-    // Statistics tracking (mutable to allow tracking in const hit())
     mutable bvh_stats stats;
     mutable bool enable_stats = false;
 
-    // Construction time tracking
     double construction_time_ms = 0.0;
-
-    // Phase-specific timing
     double opencl_init_time_ms = 0.0;
     double morton_time_ms = 0.0;
     double sort_time_ms = 0.0;
     double hierarchy_time_ms = 0.0;
     double bbox_time_ms = 0.0;
 
-    // Private recursive hit function
     bool hit_recursive(const ray& r, interval ray_t, hit_record& rec, const int node_idx) const {
         if (node_idx >= 2*N - 1 || node_idx < 0) return false;
 
@@ -316,15 +335,22 @@ class lbvh_gpu {
 
     void bottom_up_bbox_build() {
       std::queue<int> q;
+      std::vector<bool> enqueued(N - 1, false);  // Track which internal nodes are in queue
 
+      // Add all leaf parents to queue
       for (int i = 0; i < N; i++) {
         int leaf_idx = N - 1 + i;
-        if (nodes[leaf_idx].parent != -1) q.push(nodes[leaf_idx].parent);
+        int parent = nodes[leaf_idx].parent;
+        if (parent != -1 && !enqueued[parent]) {
+          q.push(parent);
+          enqueued[parent] = true;
+        }
       }
 
       while (!q.empty()) {
         int current_node_idx = q.front();
         q.pop();
+        enqueued[current_node_idx] = false;  // No longer in queue
 
         lbvh_node& current_node = nodes[current_node_idx];
 
@@ -341,14 +367,20 @@ class lbvh_gpu {
 
         if (!left_ready || !right_ready) {
           // One or both children not ready yet, push back to queue and try later
-          q.push(current_node_idx);
+          if (!enqueued[current_node_idx]) {
+            q.push(current_node_idx);
+            enqueued[current_node_idx] = true;
+          }
           continue;
         }
 
         current_node.bbox = aabb(left_child.bbox, right_child.bbox);
 
-        if (current_node.parent != -1)
+        // Add parent to queue if not already there
+        if (current_node.parent != -1 && !enqueued[current_node.parent]) {
           q.push(current_node.parent);
+          enqueued[current_node.parent] = true;
+        }
       }
     }
 
@@ -415,7 +447,7 @@ class lbvh_gpu {
 
     // OpenCL host functions
     
-    void check_cl_error (cl_int err, const char* operation) {
+    void check_cl_error (cl_int err, const char* operation) const {
       if (err != CL_SUCCESS) {
           std::cerr << "OpenCL error during " << operation << ": " << err << std::endl;
           exit(1);
@@ -437,7 +469,10 @@ class lbvh_gpu {
       queue = clCreateCommandQueue(context, device, 0, &err);
       check_cl_error(err, "clCreateCommandQueue");
 
-      std::string source = load_kernel_source("src/bvh/lbvh_kernels.cl");
+      std::string source = load_kernel_source_with_includes({
+          "src/bvh/opencl_shared_types.cl",
+          "src/bvh/lbvh_construction_kernels.cl"
+      });
       const char* src_ptr = source.c_str();
       size_t src_len = source.length();
 
@@ -463,16 +498,25 @@ class lbvh_gpu {
 
       kernel_hierarchy = clCreateKernel(program, "create_hierarchy", &err);
       check_cl_error(err, "clCreateKernel(create_hierarchy)");
+
+      kernel_build_bboxes = clCreateKernel(program, "build_bboxes", &err);
+      check_cl_error(err, "clCreateKernel(build_bboxes)"); 
     }
 
     void cleanup_opencl() {
+      // Release kernels
       if (kernel_morton) clReleaseKernel(kernel_morton);
       if (kernel_init_leaves) clReleaseKernel(kernel_init_leaves);
       if (kernel_hierarchy) clReleaseKernel(kernel_hierarchy);
+      if (kernel_build_bboxes) clReleaseKernel(kernel_build_bboxes);
+
+      // Release BVH construction buffers
       if (buf_centroids) clReleaseMemObject(buf_centroids);
       if (buf_morton_list) clReleaseMemObject(buf_morton_list);
       if (buf_bboxes) clReleaseMemObject(buf_bboxes);
       if (buf_nodes) clReleaseMemObject(buf_nodes);
+
+      // Release OpenCL resources
       if (program) clReleaseProgram(program);
       if (queue) clReleaseCommandQueue(queue);
       if (context) clReleaseContext(context);
@@ -487,6 +531,23 @@ class lbvh_gpu {
       std::stringstream buffer;
       buffer << file.rdbuf();
       return buffer.str();
+    }
+
+    std::string load_kernel_source_with_includes(const std::vector<const char*>& filenames) const {
+      std::stringstream combined;
+
+      for (const char* filename : filenames) {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+          std::cerr << "Failed to open kernel file: " << filename << std::endl;
+          exit(1);
+        }
+        combined << "// ============ BEGIN: " << filename << " ============\n";
+        combined << file.rdbuf();
+        combined << "\n// ============ END: " << filename << " ============\n\n";
+      }
+
+      return combined.str();
     }
 
 

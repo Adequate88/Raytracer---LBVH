@@ -9,6 +9,9 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
+// Temporarily disable GPU rendering to test CPU triangle
+// #define USE_GPU_RENDERING
+
 #include "rtweekend.h"
 
 #include "../bvh/lbvh_gpu.h"
@@ -17,9 +20,11 @@
 #include "hittable.h"
 #include "hittable_list.h"
 #include "material.h"
+#include "mesh.h"
 #include "quad.h"
 #include "sphere.h"
 #include "texture.h"
+#include "triangle.h"
 
 #include <chrono>
 
@@ -450,8 +455,259 @@ void final_scene(int image_width, int samples_per_pixel, int max_depth) {
 }
 
 
+void bvh_stress_test() {
+    hittable_list world;
+
+    std::clog << "\n=== BVH Stress Test Scene ===\n";
+    std::clog << "Creating randomly scattered spheres...\n";
+
+    // Create many random spheres - compact for Phase 2 testing
+    int num_spheres = 5;
+
+    for (int i = 0; i < num_spheres; i++) {
+        auto choose_mat = random_double();
+        point3 center(random_double(-25, 25), random_double(0.5, 10), random_double(-20, 20));
+        auto radius = random_double(0.5, 5);
+
+        shared_ptr<material> sphere_material;
+
+        if (choose_mat < 0.3) {
+            // diffuse (Lambertian)
+            auto albedo = color::random() * color::random();
+            sphere_material = make_shared<lambertian>(albedo);
+        } else if (choose_mat < 0.9) {
+            // metal (reflective)
+            auto albedo = color::random(0.5, 1);
+            auto fuzz = random_double(0, 0.5);
+            sphere_material = make_shared<metal>(albedo, fuzz);
+        } else {
+            // light (emissive) - testing Phase 2 lights
+            auto emit = color::random(1.0, 3.0);
+            sphere_material = make_shared<diffuse_light>(emit);
+        }
+
+        world.add(make_shared<sphere>(center, radius, sphere_material));
+    }
+
+    std::clog << "Total primitives created: " << world.objects.size() << "\n";
+    std::clog << "==============================\n\n";
+
+    // Add ground
+    auto ground_material = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+    world.add(make_shared<sphere>(point3(0,-1000,0), 1000, ground_material));
+
+    // Add main light above scene
+    auto light = make_shared<diffuse_light>(color(8, 8, 8));
+    world.add(make_shared<sphere>(point3(0, 20, 0), 5, light));
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 600;  // Higher resolution
+    cam.samples_per_pixel = 1000;  // More samples for quality
+    cam.max_depth         = 50;    // Test multi-bounce
+    cam.background        = color(0.05, 0.05, 0.10);  // Dark blue background
+
+    cam.vfov     = 40;
+    cam.lookfrom = point3(26, 12, 8);
+    cam.lookat   = point3(0, 5, 0);
+    cam.vup      = vec3(0,1,0);
+
+    cam.defocus_angle = 0;
+
+    // Start BVH construction timing
+    std::clog << "\n=== BVH Construction (GPU-Accelerated) ===\n";
+    auto bvh_start = std::chrono::high_resolution_clock::now();
+
+    lbvh_gpu world_bvh(world.objects);
+
+    auto bvh_end = std::chrono::high_resolution_clock::now();
+    double bvh_time_ms = std::chrono::duration<double, std::milli>(bvh_end - bvh_start).count();
+
+    std::clog << "\n=== Phase-by-Phase Breakdown ===\n";
+    std::clog << "Total BVH construction: " << bvh_time_ms << " ms\n";
+    std::clog << "  - OpenCL initialization: " << world_bvh.get_opencl_init_time() << " ms\n";
+    std::clog << "  - Morton code computation (GPU): " << world_bvh.get_morton_time() << " ms\n";
+    std::clog << "  - Radix sort (CPU): " << world_bvh.get_sort_time() << " ms\n";
+    std::clog << "  - Hierarchy construction (GPU): " << world_bvh.get_hierarchy_time() << " ms\n";
+    std::clog << "  - Bounding box propagation (CPU): " << world_bvh.get_bbox_time() << " ms\n";
+
+    double algorithmic_time = world_bvh.get_morton_time() + world_bvh.get_sort_time() +
+                             world_bvh.get_hierarchy_time() + world_bvh.get_bbox_time();
+    std::clog << "\nAlgorithmic work (excluding OpenCL init): " << algorithmic_time << " ms\n";
+    std::clog << "Tree depth: " << world_bvh.get_tree_depth() << "\n";
+    std::clog << "======================================\n\n";
+
+    // Enable statistics
+    world_bvh.enable_statistics();
+
+    // Render (minimal resolution for speed)
+    std::clog << "Starting render...\n";
+    auto render_start = std::chrono::high_resolution_clock::now();
+    cam.render(world_bvh);
+    auto render_end = std::chrono::high_resolution_clock::now();
+    double render_time_ms = std::chrono::duration<double, std::milli>(render_end - render_start).count();
+
+    std::clog << "\n=== Final Performance Summary ===\n";
+    std::clog << "BVH construction: " << bvh_time_ms << " ms\n";
+    std::clog << "Rendering time: " << render_time_ms << " ms\n";
+    std::clog << "Total time: " << (bvh_time_ms + render_time_ms) << " ms\n";
+    std::clog << "=================================\n";
+
+    // Print BVH statistics
+    world_bvh.get_stats().print();
+}
+
+
+void single_triangle_test() {
+    hittable_list world;
+
+    // Single triangle (red)
+    auto tri_mat = make_shared<lambertian>(color(0.8, 0.2, 0.2));
+    auto tri = make_shared<triangle>(
+        point3(-1, 0, -1),
+        point3( 1, 0, -1),
+        point3( 0, 2, -1),
+        tri_mat
+    );
+    world.add(tri);
+
+    // Ground sphere
+    auto ground_mat = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+    world.add(make_shared<sphere>(point3(0,-1000,0), 1000, ground_mat));
+
+    // Light source
+    auto light = make_shared<diffuse_light>(color(4, 4, 4));
+    world.add(make_shared<sphere>(point3(3, 5, 3), 1.5, light));
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 600;
+    cam.samples_per_pixel = 100;
+    cam.max_depth         = 50;
+    cam.background        = color(0.7, 0.8, 1.0);
+
+    cam.vfov     = 40;
+    cam.lookfrom = point3(0, 2, 5);
+    cam.lookat   = point3(0, 1, -1);
+    cam.vup      = vec3(0, 1, 0);
+
+    cam.defocus_angle = 0;
+
+    lbvh_gpu world_bvh(world.objects);
+    cam.render(world_bvh);
+}
+
+
+void mesh_test_scene() {
+    hittable_list world;
+
+    // Load cube mesh
+    auto mesh_mat = make_shared<lambertian>(color(0.7, 0.3, 0.2));
+    auto mesh_triangles = mesh::load_obj("models/cube.obj", mesh_mat, true, 1.0);
+
+    // Add triangles directly (GPU renderer doesn't support translate wrapper yet)
+    for (auto& tri : mesh_triangles->objects) {
+        world.add(tri);
+    }
+
+    // Add ground plane
+    auto ground_mat = make_shared<lambertian>(color(0.5, 0.5, 0.5));
+    world.add(make_shared<sphere>(point3(0,-1000,0), 1000, ground_mat));
+
+    // Add light source
+    auto light = make_shared<diffuse_light>(color(4, 4, 4));
+    world.add(make_shared<sphere>(point3(3, 5, 3), 1.5, light));
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 600;
+    cam.samples_per_pixel = 100;
+    cam.max_depth         = 50;
+    cam.background        = color(0.7, 0.8, 1.0);
+
+    cam.vfov     = 40;
+    cam.lookfrom = point3(4, 3, 6);
+    cam.lookat   = point3(0, 1, 0);
+    cam.vup      = vec3(0, 1, 0);
+
+    cam.defocus_angle = 0;
+
+    lbvh_gpu world_bvh(world.objects);
+    cam.render(world_bvh);
+}
+
+
+void dragon_scene() {
+    hittable_list world;
+
+    // Load Stanford Dragon (high resolution)
+    auto dragon_mat = make_shared<metal>(color(0.8, 0.6, 0.2), 0.1);
+    std::clog << "Loading Stanford Dragon..." << std::endl;
+    auto dragon_triangles = mesh::load_obj("models/dragon.obj", dragon_mat, true, 1.0);
+
+    // Add triangles directly (GPU renderer doesn't support translate wrapper yet)
+    for (auto& tri : dragon_triangles->objects) {
+        world.add(tri);
+    }
+
+
+    // Add multiple light sources for better illumination
+    auto light1 = make_shared<diffuse_light>(color(4, 4, 4));
+    world.add(make_shared<sphere>(point3(5, 8, 5), 2.0, light1));
+
+    auto light2 = make_shared<diffuse_light>(color(2, 2, 2));
+    world.add(make_shared<sphere>(point3(-5, 6, -3), 1.5, light2));
+
+    camera cam;
+
+    cam.aspect_ratio      = 16.0 / 9.0;
+    cam.image_width       = 100;
+    cam.samples_per_pixel = 10;
+    cam.max_depth         = 5;
+    cam.background        = color(0.02, 0.02, 0.02);  // Dark background
+
+    cam.vfov     = 40;  // Wider FOV for closer view
+    cam.lookfrom = point3(-1, 0.3, -1);  // Much closer, slightly above
+    cam.lookat   = point3(0, 0, 0);  // Looking at dragon's center
+    cam.vup      = vec3(0, 1, 0);
+
+    cam.defocus_angle = 0.0;  // Slight depth of field for cinematic look
+
+    // Start BVH construction timing
+    std::clog << "\n=== BVH Construction (GPU-Accelerated) ===\n";
+    auto bvh_start = std::chrono::high_resolution_clock::now();
+
+    lbvh_gpu world_bvh(world.objects);
+
+    auto bvh_end = std::chrono::high_resolution_clock::now();
+    double bvh_time_ms = std::chrono::duration<double, std::milli>(bvh_end - bvh_start).count();
+
+    std::clog << "\n=== Phase-by-Phase Breakdown ===\n";
+    std::clog << "Total BVH construction: " << bvh_time_ms << " ms\n";
+    std::clog << "  - OpenCL initialization: " << world_bvh.get_opencl_init_time() << " ms\n";
+    std::clog << "  - Morton code computation (GPU): " << world_bvh.get_morton_time() << " ms\n";
+    std::clog << "  - Radix sort (CPU): " << world_bvh.get_sort_time() << " ms\n";
+    std::clog << "  - Hierarchy construction (GPU): " << world_bvh.get_hierarchy_time() << " ms\n";
+    std::clog << "  - Bounding box propagation (CPU): " << world_bvh.get_bbox_time() << " ms\n";
+
+    double algorithmic_time = world_bvh.get_morton_time() + world_bvh.get_sort_time() +
+                             world_bvh.get_hierarchy_time() + world_bvh.get_bbox_time();
+    std::clog << "\nAlgorithmic work (excluding OpenCL init): " << algorithmic_time << " ms\n";
+    std::clog << "Tree depth: " << world_bvh.get_tree_depth() << "\n";
+    std::clog << "======================================\n\n";
+
+    // Enable statistics
+    world_bvh.enable_statistics();
+
+    cam.render(world_bvh);
+}
+
+
 int main() {
-    switch (7) {
+    switch (14) {
         case 1:  bouncing_spheres();          break;
         case 2:  checkered_spheres();         break;
         case 3:  earth();                     break;
@@ -461,6 +717,10 @@ int main() {
         case 7:  cornell_box();               break;
         case 8:  cornell_smoke();             break;
         case 9:  final_scene(800, 10000, 40); break;
+        case 11: bvh_stress_test();           break;
+        case 12: single_triangle_test();      break;
+        case 13: mesh_test_scene();           break;
+        case 14: dragon_scene();              break;
         default: final_scene(400,   250,  4); break;
     }
 }

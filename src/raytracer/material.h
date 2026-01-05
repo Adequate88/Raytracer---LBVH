@@ -49,6 +49,12 @@ class lambertian : public material {
         return true;
     }
 
+    color get_albedo() const {
+        auto* sc = dynamic_cast<solid_color*>(tex.get());
+        if (sc) return sc->get_value();
+        return color(1,0,1);
+    }
+
   private:
     shared_ptr<texture> tex;
 };
@@ -66,6 +72,9 @@ class metal : public material {
         attenuation = albedo;
         return (dot(scattered.direction(), rec.normal) > 0);
     }
+
+    color get_albedo() const { return albedo; }
+    float get_fuzz() const { return fuzz; }
 
   private:
     color albedo;
@@ -119,6 +128,12 @@ class diffuse_light : public material {
 
     color emitted(double u, double v, const point3& p) const override {
         return tex->value(u, v, p);
+    }
+
+    color get_emit() const {
+        auto* sc = dynamic_cast<solid_color*>(tex.get());
+        if (sc) return sc->get_value();
+        return color(1,1,1);
     }
 
   private:

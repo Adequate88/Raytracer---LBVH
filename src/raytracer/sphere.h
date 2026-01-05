@@ -70,6 +70,10 @@ class sphere : public hittable {
 
     aabb bounding_box() const override { return bbox; }
 
+    point3 center_at(double time) const { return center.at(time); }
+    double get_radius() const { return radius; }
+    const material* get_material_ptr() const { return mat.get(); }
+
   private:
     ray center;
     double radius;

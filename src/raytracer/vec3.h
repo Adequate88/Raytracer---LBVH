@@ -151,4 +151,20 @@ inline vec3 refract(const vec3& uv, const vec3& n, double etai_over_etat) {
 }
 
 
+// vec2 class for 2D vectors (used for texture coordinates)
+class vec2 {
+  public:
+    double e[2];
+
+    vec2() : e{0,0} {}
+    vec2(double x, double y) : e{x,y} {}
+
+    double x() const { return e[0]; }
+    double y() const { return e[1]; }
+
+    double operator[](int i) const { return e[i]; }
+    double& operator[](int i) { return e[i]; }
+};
+
+
 #endif

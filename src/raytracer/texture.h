@@ -33,6 +33,8 @@ class solid_color : public texture {
         return albedo;
     }
 
+    color get_value() const { return albedo; }
+
   private:
     color albedo;
 };
