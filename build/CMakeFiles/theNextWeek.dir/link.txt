@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/theNextWeek.dir/link.d CMakeFiles/theNextWeek.dir/src/raytracer/main.cc.o -o theNextWeek  /usr/lib/libOpenCL.so

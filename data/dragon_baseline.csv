@@ -1,0 +1,4 @@
+total_construction_ms,845.516
+total_rays,92160000
+avg_box_tests_per_ray,40.154
+avg_prim_tests_per_ray,1.774

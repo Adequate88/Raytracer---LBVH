@@ -1,0 +1,8 @@
+morton_code_ms,1166.216
+radix_sort_ms,5882.491
+hierarchy_ms,3933.854
+bbox_propagation_ms,1622.938
+total_construction_ms,13988.551
+total_rays,92160000
+avg_box_tests_per_ray,48.561
+avg_prim_tests_per_ray,1.084

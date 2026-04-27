@@ -1,0 +1,3 @@
+/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles/theNextWeek.dir
+/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles/edit_cache.dir
+/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles/rebuild_cache.dir

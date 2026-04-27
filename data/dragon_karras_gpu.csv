@@ -1,0 +1,10 @@
+opencl_init_ms,86.797
+data_prep_ms,80.638
+morton_code_ms,0.883
+radix_sort_ms,5.386
+hierarchy_ms,4.515
+bbox_propagation_ms,3.118
+total_construction_ms,181.337
+total_rays,92160000
+avg_box_tests_per_ray,43.992
+avg_prim_tests_per_ray,1.778
