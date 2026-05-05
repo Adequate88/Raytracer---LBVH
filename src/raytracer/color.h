@@ -1,5 +1,4 @@
-#ifndef COLOR_H
-#define COLOR_H
+#pragma once
 //==============================================================================================
 // Originally written in 2020 by Peter Shirley <ptrshrl@gmail.com>
 //
@@ -14,9 +13,7 @@
 #include "interval.h"
 #include "vec3.h"
 
-
 using color = vec3;
-
 
 inline double linear_to_gamma(double linear_component)
 {
@@ -48,4 +45,3 @@ void write_color(std::ostream& out, const color& pixel_color) {
 }
 
 
-#endif

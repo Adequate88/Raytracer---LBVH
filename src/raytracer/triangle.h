@@ -1,6 +1,6 @@
-#ifndef TRIANGLE_H
-#define TRIANGLE_H
+#pragma once
 
+#include "aabb_refactored.h"
 #include "hittable.h"
 #include "material.h"
 #include <cmath>
@@ -92,7 +92,7 @@ class triangle : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    AABB bounding_box() const override { return bbox; }
 
     const point3& get_v0() const { return v0; }
     const point3& get_v1() const { return v1; }
@@ -109,10 +109,10 @@ class triangle : public hittable {
     vec2 uv0, uv1, uv2;
     vec3 geometric_normal;
     shared_ptr<material> mat;
-    aabb bbox;
+    AABB bbox;
     bool smooth_shading;
 
-    aabb compute_bbox() const {
+    AABB compute_bbox() const {
         point3 min_pt(
             std::min({v0.x(), v1.x(), v2.x()}),
             std::min({v0.y(), v1.y(), v2.y()}),
@@ -123,9 +123,8 @@ class triangle : public hittable {
             std::max({v0.y(), v1.y(), v2.y()}),
             std::max({v0.z(), v1.z(), v2.z()})
         );
-        return aabb(min_pt, max_pt);
+        return AABB(min_pt, max_pt);
     }
 };
 
 
-#endif

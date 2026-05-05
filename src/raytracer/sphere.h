@@ -1,5 +1,4 @@
-#ifndef SPHERE_H
-#define SPHERE_H
+#pragma once
 //==============================================================================================
 // Originally written in 2016 by Peter Shirley <ptrshrl@gmail.com>
 //
@@ -11,6 +10,7 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
+#include "aabb_refactored.h"
 #include "hittable.h"
 
 class sphere : public hittable {
@@ -20,7 +20,7 @@ class sphere : public hittable {
       : center(static_center, vec3(0,0,0)), radius(std::fmax(0,radius)), mat(mat)
     {
         auto rvec = vec3(radius, radius, radius);
-        bbox = aabb(static_center - rvec, static_center + rvec);
+        bbox = AABB(static_center - rvec, static_center + rvec);
         centroid = static_center;
     }
 
@@ -30,9 +30,9 @@ class sphere : public hittable {
       : center(center1, center2 - center1), radius(std::fmax(0,radius)), mat(mat)
     {
         auto rvec = vec3(radius, radius, radius);
-        aabb box1(center.at(0) - rvec, center.at(0) + rvec);
-        aabb box2(center.at(1) - rvec, center.at(1) + rvec);
-        bbox = aabb(box1, box2);
+        AABB box1(center.at(0) - rvec, center.at(0) + rvec);
+        AABB box2(center.at(1) - rvec, center.at(1) + rvec);
+        bbox = AABB(box1, box2);
         // For moving spheres, use center at time 0.5 (midpoint of motion)
         centroid = center.at(0.5);
     }
@@ -68,7 +68,7 @@ class sphere : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    AABB bounding_box() const override { return bbox; }
 
     point3 center_at(double time) const { return center.at(time); }
     double get_radius() const { return radius; }
@@ -78,7 +78,7 @@ class sphere : public hittable {
     ray center;
     double radius;
     shared_ptr<material> mat;
-    aabb bbox;
+    AABB bbox;
 
     static void get_sphere_uv(const point3& p, double& u, double& v) {
         // p: a given point on the sphere of radius one, centered at the origin.
@@ -96,5 +96,3 @@ class sphere : public hittable {
     }
 };
 
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef HITTABLE_LIST_H
-#define HITTABLE_LIST_H
+#pragma once
 //==============================================================================================
 // Originally written in 2016 by Peter Shirley <ptrshrl@gmail.com>
 //
@@ -28,7 +27,7 @@ class hittable_list : public hittable {
 
     void add(shared_ptr<hittable> object) {
         objects.push_back(object);
-        bbox = aabb(bbox, object->bounding_box());
+        bbox = AABB(bbox, object->bounding_box());
         // Update centroid to be the center of the bounding box
         centroid = point3(
             (bbox.min_x + bbox.max_x) / 2.0,
@@ -53,11 +52,10 @@ class hittable_list : public hittable {
         return hit_anything;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    AABB bounding_box() const override { return bbox; }
 
   private:
-    aabb bbox;
+    AABB bbox;
 };
 
 
-#endif

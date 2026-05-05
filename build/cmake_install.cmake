@@ -1,4 +1,4 @@
-# Install script for directory: /home/arcanine/Portfolio/AdvGraphics_project2_7023839
+# Install script for directory: /home/growlithe/Portfolio/Raytracer---LBVH
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -42,10 +42,15 @@ if(NOT DEFINED CMAKE_OBJDUMP)
   set(CMAKE_OBJDUMP "/usr/bin/objdump")
 endif()
 
+if(NOT CMAKE_INSTALL_LOCAL_ONLY)
+  # Include the install script for the subdirectory.
+  include("/home/growlithe/Portfolio/Raytracer---LBVH/build/src/cmake_install.cmake")
+endif()
+
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
 if(CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/install_local_manifest.txt"
+  file(WRITE "/home/growlithe/Portfolio/Raytracer---LBVH/build/install_local_manifest.txt"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()
 if(CMAKE_INSTALL_COMPONENT)
@@ -61,6 +66,6 @@ else()
 endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
-  file(WRITE "/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/${CMAKE_INSTALL_MANIFEST}"
+  file(WRITE "/home/growlithe/Portfolio/Raytracer---LBVH/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
 endif()

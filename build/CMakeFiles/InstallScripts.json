@@ -1,7 +1,10 @@
 {
 	"InstallScripts" : 
 	[
-		"/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/cmake_install.cmake"
+		"/home/growlithe/Portfolio/Raytracer---LBVH/build/cmake_install.cmake",
+		"/home/growlithe/Portfolio/Raytracer---LBVH/build/src/cmake_install.cmake",
+		"/home/growlithe/Portfolio/Raytracer---LBVH/build/src/bvh/cmake_install.cmake",
+		"/home/growlithe/Portfolio/Raytracer---LBVH/build/src/raytracer/cmake_install.cmake"
 	],
 	"Parallel" : false
 }

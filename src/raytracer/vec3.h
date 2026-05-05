@@ -1,5 +1,4 @@
-#ifndef VEC3_H
-#define VEC3_H
+#pragma once
 //==============================================================================================
 // Originally written in 2016 by Peter Shirley <ptrshrl@gmail.com>
 //
@@ -11,6 +10,8 @@
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
 
+#include <cmath>
+#include "types.h"
 
 class vec3 {
   public:
@@ -166,5 +167,3 @@ class vec2 {
     double& operator[](int i) { return e[i]; }
 };
 
-
-#endif

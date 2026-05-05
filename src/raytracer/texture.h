@@ -1,5 +1,4 @@
-#ifndef TEXTURE_H
-#define TEXTURE_H
+#pragma once
 //==============================================================================================
 // Originally written in 2016 by Peter Shirley <ptrshrl@gmail.com>
 //
@@ -12,6 +11,7 @@
 //==============================================================================================
 
 #include "perlin.h"
+#include "color.h"
 #include "rtw_stb_image.h"
 
 
@@ -104,4 +104,3 @@ class noise_texture : public texture {
 };
 
 
-#endif

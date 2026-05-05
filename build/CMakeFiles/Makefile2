@@ -54,61 +54,189 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/arcanine/Portfolio/AdvGraphics_project2_7023839
+CMAKE_SOURCE_DIR = /home/growlithe/Portfolio/Raytracer---LBVH
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build
+CMAKE_BINARY_DIR = /home/growlithe/Portfolio/Raytracer---LBVH/build
 
 #=============================================================================
 # Directory level rules for the build root directory
 
 # The main recursive "all" target.
-all: CMakeFiles/theNextWeek.dir/all
+all: src/all
 .PHONY : all
 
 # The main recursive "codegen" target.
-codegen: CMakeFiles/theNextWeek.dir/codegen
+codegen: src/codegen
 .PHONY : codegen
 
 # The main recursive "preinstall" target.
-preinstall:
+preinstall: src/preinstall
 .PHONY : preinstall
 
 # The main recursive "clean" target.
-clean: CMakeFiles/theNextWeek.dir/clean
+clean: src/clean
 .PHONY : clean
 
 #=============================================================================
-# Target rules for target CMakeFiles/theNextWeek.dir
+# Directory level rules for directory src
+
+# Recursive "all" directory target.
+src/all: src/CMakeFiles/engine.dir/all
+src/all: src/bvh/all
+src/all: src/raytracer/all
+.PHONY : src/all
+
+# Recursive "codegen" directory target.
+src/codegen: src/CMakeFiles/engine.dir/codegen
+src/codegen: src/bvh/codegen
+src/codegen: src/raytracer/codegen
+.PHONY : src/codegen
+
+# Recursive "preinstall" directory target.
+src/preinstall: src/bvh/preinstall
+src/preinstall: src/raytracer/preinstall
+.PHONY : src/preinstall
+
+# Recursive "clean" directory target.
+src/clean: src/CMakeFiles/engine.dir/clean
+src/clean: src/bvh/clean
+src/clean: src/raytracer/clean
+.PHONY : src/clean
+
+#=============================================================================
+# Directory level rules for directory src/bvh
+
+# Recursive "all" directory target.
+src/bvh/all: src/bvh/CMakeFiles/bvh.dir/all
+.PHONY : src/bvh/all
+
+# Recursive "codegen" directory target.
+src/bvh/codegen: src/bvh/CMakeFiles/bvh.dir/codegen
+.PHONY : src/bvh/codegen
+
+# Recursive "preinstall" directory target.
+src/bvh/preinstall:
+.PHONY : src/bvh/preinstall
+
+# Recursive "clean" directory target.
+src/bvh/clean: src/bvh/CMakeFiles/bvh.dir/clean
+.PHONY : src/bvh/clean
+
+#=============================================================================
+# Directory level rules for directory src/raytracer
+
+# Recursive "all" directory target.
+src/raytracer/all: src/raytracer/CMakeFiles/raytracer.dir/all
+.PHONY : src/raytracer/all
+
+# Recursive "codegen" directory target.
+src/raytracer/codegen: src/raytracer/CMakeFiles/raytracer.dir/codegen
+.PHONY : src/raytracer/codegen
+
+# Recursive "preinstall" directory target.
+src/raytracer/preinstall:
+.PHONY : src/raytracer/preinstall
+
+# Recursive "clean" directory target.
+src/raytracer/clean: src/raytracer/CMakeFiles/raytracer.dir/clean
+.PHONY : src/raytracer/clean
+
+#=============================================================================
+# Target rules for target src/CMakeFiles/engine.dir
 
 # All Build rule for target.
-CMakeFiles/theNextWeek.dir/all:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/depend
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles --progress-num=1,2 "Built target theNextWeek"
-.PHONY : CMakeFiles/theNextWeek.dir/all
+src/CMakeFiles/engine.dir/all: src/bvh/CMakeFiles/bvh.dir/all
+	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/depend
+	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=3,4 "Built target engine"
+.PHONY : src/CMakeFiles/engine.dir/all
 
 # Build rule for subdir invocation for target.
-CMakeFiles/theNextWeek.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles 2
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/theNextWeek.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles 0
-.PHONY : CMakeFiles/theNextWeek.dir/rule
+src/CMakeFiles/engine.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 7
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/CMakeFiles/engine.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 0
+.PHONY : src/CMakeFiles/engine.dir/rule
 
 # Convenience name for target.
-theNextWeek: CMakeFiles/theNextWeek.dir/rule
-.PHONY : theNextWeek
+engine: src/CMakeFiles/engine.dir/rule
+.PHONY : engine
 
 # codegen rule for target.
-CMakeFiles/theNextWeek.dir/codegen:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles --progress-num=1,2 "Finished codegen for target theNextWeek"
-.PHONY : CMakeFiles/theNextWeek.dir/codegen
+src/CMakeFiles/engine.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=3,4 "Finished codegen for target engine"
+.PHONY : src/CMakeFiles/engine.dir/codegen
 
 # clean rule for target.
-CMakeFiles/theNextWeek.dir/clean:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/clean
-.PHONY : CMakeFiles/theNextWeek.dir/clean
+src/CMakeFiles/engine.dir/clean:
+	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/clean
+.PHONY : src/CMakeFiles/engine.dir/clean
+
+#=============================================================================
+# Target rules for target src/bvh/CMakeFiles/bvh.dir
+
+# All Build rule for target.
+src/bvh/CMakeFiles/bvh.dir/all: src/raytracer/CMakeFiles/raytracer.dir/all
+	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/depend
+	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=1,2 "Built target bvh"
+.PHONY : src/bvh/CMakeFiles/bvh.dir/all
+
+# Build rule for subdir invocation for target.
+src/bvh/CMakeFiles/bvh.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 5
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/bvh/CMakeFiles/bvh.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 0
+.PHONY : src/bvh/CMakeFiles/bvh.dir/rule
+
+# Convenience name for target.
+bvh: src/bvh/CMakeFiles/bvh.dir/rule
+.PHONY : bvh
+
+# codegen rule for target.
+src/bvh/CMakeFiles/bvh.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=1,2 "Finished codegen for target bvh"
+.PHONY : src/bvh/CMakeFiles/bvh.dir/codegen
+
+# clean rule for target.
+src/bvh/CMakeFiles/bvh.dir/clean:
+	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/clean
+.PHONY : src/bvh/CMakeFiles/bvh.dir/clean
+
+#=============================================================================
+# Target rules for target src/raytracer/CMakeFiles/raytracer.dir
+
+# All Build rule for target.
+src/raytracer/CMakeFiles/raytracer.dir/all:
+	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/depend
+	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=5,6,7 "Built target raytracer"
+.PHONY : src/raytracer/CMakeFiles/raytracer.dir/all
+
+# Build rule for subdir invocation for target.
+src/raytracer/CMakeFiles/raytracer.dir/rule: cmake_check_build_system
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 3
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/raytracer/CMakeFiles/raytracer.dir/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 0
+.PHONY : src/raytracer/CMakeFiles/raytracer.dir/rule
+
+# Convenience name for target.
+raytracer: src/raytracer/CMakeFiles/raytracer.dir/rule
+.PHONY : raytracer
+
+# codegen rule for target.
+src/raytracer/CMakeFiles/raytracer.dir/codegen:
+	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/codegen
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=5,6,7 "Finished codegen for target raytracer"
+.PHONY : src/raytracer/CMakeFiles/raytracer.dir/codegen
+
+# clean rule for target.
+src/raytracer/CMakeFiles/raytracer.dir/clean:
+	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/clean
+.PHONY : src/raytracer/CMakeFiles/raytracer.dir/clean
 
 #=============================================================================
 # Special targets to cleanup operation of make.

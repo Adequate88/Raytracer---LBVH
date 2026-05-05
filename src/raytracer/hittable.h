@@ -30,7 +30,7 @@ class hittable {
 
     virtual bool hit(const ray& r, interval ray_t, hit_record& rec) const = 0;
 
-    virtual aabb bounding_box() const = 0;
+    virtual AABB bounding_box() const = 0;
 
     point3 get_centroid() const { return centroid; }
 
@@ -62,12 +62,12 @@ class translate : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    AABB bounding_box() const override { return bbox; }
 
   private:
     shared_ptr<hittable> object;
     vec3 offset;
-    aabb bbox;
+    AABB bbox;
 };
 
 
@@ -102,7 +102,7 @@ class rotate_y : public hittable {
             }
         }
 
-        bbox = aabb(min, max);
+        bbox = AABB(min, max);
 
         // Rotate the centroid
         auto c = object->get_centroid();
@@ -153,13 +153,13 @@ class rotate_y : public hittable {
         return true;
     }
 
-    aabb bounding_box() const override { return bbox; }
+    AABB bounding_box() const override { return bbox; }
 
   private:
     shared_ptr<hittable> object;
     double sin_theta;
     double cos_theta;
-    aabb bbox;
+    AABB bbox;
 };
 
 

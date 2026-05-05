@@ -1,5 +1,4 @@
-#ifndef RTW_STB_IMAGE_H
-#define RTW_STB_IMAGE_H
+#pragma once
 //==============================================================================================
 // To the extent possible under law, the author(s) have dedicated all copyright and related and
 // neighboring rights to this software to the public domain worldwide. This software is
@@ -16,7 +15,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STBI_FAILURE_USERMSG
-#include "external/stb_image.h"
+#include <stb_image.h>
 
 #include <cstdlib>
 #include <iostream>
@@ -131,7 +130,4 @@ class rtw_image {
 // Restore MSVC compiler warnings
 #ifdef _MSC_VER
     #pragma warning (pop)
-#endif
-
-
 #endif

@@ -1,0 +1,7 @@
+# Ignore output data 
+data/*
+
+# Ignore build directory
+build/
+
+

@@ -57,10 +57,10 @@ RM = /usr/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /home/arcanine/Portfolio/AdvGraphics_project2_7023839
+CMAKE_SOURCE_DIR = /home/growlithe/Portfolio/Raytracer---LBVH
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build
+CMAKE_BINARY_DIR = /home/growlithe/Portfolio/Raytracer---LBVH/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -87,17 +87,10 @@ rebuild_cache/fast: rebuild_cache
 
 # The main all target
 all: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build//CMakeFiles/progress.marks
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles /home/growlithe/Portfolio/Raytracer---LBVH/build//CMakeFiles/progress.marks
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 all
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 0
 .PHONY : all
-
-# The main codegen target
-codegen: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build//CMakeFiles/progress.marks
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 codegen
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/arcanine/Portfolio/AdvGraphics_project2_7023839/build/CMakeFiles 0
-.PHONY : codegen
 
 # The main clean target
 clean:
@@ -124,41 +117,43 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named theNextWeek
+# Target rules for targets named engine
 
 # Build rule for target.
-theNextWeek: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 theNextWeek
-.PHONY : theNextWeek
+engine: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 engine
+.PHONY : engine
 
 # fast build rule for target.
-theNextWeek/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/build
-.PHONY : theNextWeek/fast
+engine/fast:
+	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/build
+.PHONY : engine/fast
 
-src/raytracer/main.o: src/raytracer/main.cc.o
-.PHONY : src/raytracer/main.o
+#=============================================================================
+# Target rules for targets named bvh
 
-# target to build an object file
-src/raytracer/main.cc.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/src/raytracer/main.cc.o
-.PHONY : src/raytracer/main.cc.o
+# Build rule for target.
+bvh: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 bvh
+.PHONY : bvh
 
-src/raytracer/main.i: src/raytracer/main.cc.i
-.PHONY : src/raytracer/main.i
+# fast build rule for target.
+bvh/fast:
+	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/build
+.PHONY : bvh/fast
 
-# target to preprocess a source file
-src/raytracer/main.cc.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/src/raytracer/main.cc.i
-.PHONY : src/raytracer/main.cc.i
+#=============================================================================
+# Target rules for targets named raytracer
 
-src/raytracer/main.s: src/raytracer/main.cc.s
-.PHONY : src/raytracer/main.s
+# Build rule for target.
+raytracer: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 raytracer
+.PHONY : raytracer
 
-# target to generate assembly for a file
-src/raytracer/main.cc.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/theNextWeek.dir/build.make CMakeFiles/theNextWeek.dir/src/raytracer/main.cc.s
-.PHONY : src/raytracer/main.cc.s
+# fast build rule for target.
+raytracer/fast:
+	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/build
+.PHONY : raytracer/fast
 
 # Help Target
 help:
@@ -166,13 +161,11 @@ help:
 	@echo "... all (the default if no target is provided)"
 	@echo "... clean"
 	@echo "... depend"
-	@echo "... codegen"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... theNextWeek"
-	@echo "... src/raytracer/main.o"
-	@echo "... src/raytracer/main.i"
-	@echo "... src/raytracer/main.s"
+	@echo "... bvh"
+	@echo "... engine"
+	@echo "... raytracer"
 .PHONY : help
 
 

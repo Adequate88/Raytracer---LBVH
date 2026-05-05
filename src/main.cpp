@@ -1,7 +1,4 @@
-#include "rtweekend.h"
-#include "../bvh/bvh.h"
-#include "../bvh/lbvh_karras_cpu.h"
-#include "../bvh/lbvh_karras_gpu.h"
+#include "lbvh_karras_gpu.h"
 #include "camera.h"
 #include "hittable.h"
 #include "hittable_list.h"
@@ -175,32 +172,12 @@ void run_experiment(scene_config& config) {
         std::ofstream out("data/" + config.name + "_karras_gpu.ppm");
         std::cout.rdbuf(out.rdbuf());
 
-        run_single_experiment<lbvh_karras_gpu>(config.world, config.cam, "karras_gpu", config.name);
+        run_single_experiment<LBVH>(config.world, config.cam, "karras_gpu", config.name);
 
         std::cout.rdbuf(orig);
     }
 
-    // 2. Karras CPU LBVH
-    {
-        std::streambuf* orig = std::cout.rdbuf();
-        std::ofstream out("data/" + config.name + "_karras_cpu.ppm");
-        std::cout.rdbuf(out.rdbuf());
-
-        run_single_experiment<lbvh_karras_cpu>(config.world, config.cam, "karras_cpu", config.name);
-
-        std::cout.rdbuf(orig);
-    }
-
-    // 3. Baseline BVH
-    {
-        std::streambuf* orig = std::cout.rdbuf();
-        std::ofstream out("Data/" + config.name + "_baseline.ppm");
-        std::cout.rdbuf(out.rdbuf());
-
-        run_single_experiment<bvh>(config.world, config.cam, "baseline", config.name);
-
-        std::cout.rdbuf(orig);
-    }
+    
 
     std::clog << "\nExperiment '" << config.name << "' complete.\n";
     std::clog << "Results saved to data/\n";

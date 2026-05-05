@@ -1,9 +1,8 @@
-#ifndef BVH_H
-#define BVH_H
+#pragma once
 
-#include "../raytracer/aabb_refactored.h"
-#include "../raytracer/hittable.h"
-#include "../raytracer/hittable_list.h"
+#include "aabb_refactored.h"
+#include "hittable.h"
+#include "hittable_list.h"
 
 #include <algorithm>
 #include <chrono>
@@ -33,7 +32,7 @@ struct bvh_stats {
 };
 
 struct bvh_node {
-    aabb bbox;
+    AABB bbox;
     int left;
     int right;
     int parent;
@@ -106,9 +105,9 @@ class bvh {
 
         int count = end - start;
 
-        node.bbox = aabb::empty;
+        node.bbox = AABB::empty;
         for (int i = start; i < end; i++) {
-            node.bbox = aabb(node.bbox, objects[i]->bounding_box());
+            node.bbox = AABB(node.bbox, objects[i]->bounding_box());
         }
 
         if (count == 1) {
@@ -165,5 +164,3 @@ class bvh {
         return 1 + std::max(compute_depth(node.left), compute_depth(node.right));
     }
 };
-
-#endif

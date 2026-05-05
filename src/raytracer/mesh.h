@@ -1,6 +1,6 @@
-#ifndef MESH_H
-#define MESH_H
+#pragma once
 
+#include "aabb_refactored.h"
 #include "triangle.h"
 #include "hittable_list.h"
 
@@ -119,9 +119,9 @@ class mesh {
             return point3(0,0,0);
         }
 
-        aabb mesh_bbox = triangles->objects[0]->bounding_box();
+        AABB mesh_bbox = triangles->objects[0]->bounding_box();
         for (size_t i = 1; i < triangles->objects.size(); i++) {
-            mesh_bbox = aabb(mesh_bbox, triangles->objects[i]->bounding_box());
+            mesh_bbox = AABB(mesh_bbox, triangles->objects[i]->bounding_box());
         }
 
         point3 center(
@@ -134,5 +134,3 @@ class mesh {
     }
 };
 
-
-#endif
