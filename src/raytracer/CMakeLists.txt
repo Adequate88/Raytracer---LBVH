@@ -3,7 +3,8 @@ add_library(raytracer STATIC
   interval.cpp
 )
 
-target_link_libraries(raytracer PRIVATE bvh OpenCL::OpenCL)
+target_link_libraries(raytracer PRIVATE bvh engine OpenCL::OpenCL)
 target_include_directories(raytracer PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}")
+
 
 

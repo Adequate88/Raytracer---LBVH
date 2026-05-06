@@ -149,12 +149,12 @@ src/raytracer/clean: src/raytracer/CMakeFiles/raytracer.dir/clean
 src/CMakeFiles/engine.dir/all: src/bvh/CMakeFiles/bvh.dir/all
 	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/depend
 	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=3,4 "Built target engine"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=4,5 "Built target engine"
 .PHONY : src/CMakeFiles/engine.dir/all
 
 # Build rule for subdir invocation for target.
 src/CMakeFiles/engine.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 7
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 8
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/CMakeFiles/engine.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 0
 .PHONY : src/CMakeFiles/engine.dir/rule
@@ -166,7 +166,7 @@ engine: src/CMakeFiles/engine.dir/rule
 # codegen rule for target.
 src/CMakeFiles/engine.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f src/CMakeFiles/engine.dir/build.make src/CMakeFiles/engine.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=3,4 "Finished codegen for target engine"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=4,5 "Finished codegen for target engine"
 .PHONY : src/CMakeFiles/engine.dir/codegen
 
 # clean rule for target.
@@ -181,12 +181,12 @@ src/CMakeFiles/engine.dir/clean:
 src/bvh/CMakeFiles/bvh.dir/all: src/raytracer/CMakeFiles/raytracer.dir/all
 	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/depend
 	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=1,2 "Built target bvh"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=1,2,3 "Built target bvh"
 .PHONY : src/bvh/CMakeFiles/bvh.dir/all
 
 # Build rule for subdir invocation for target.
 src/bvh/CMakeFiles/bvh.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 5
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 6
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 src/bvh/CMakeFiles/bvh.dir/all
 	$(CMAKE_COMMAND) -E cmake_progress_start /home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles 0
 .PHONY : src/bvh/CMakeFiles/bvh.dir/rule
@@ -198,7 +198,7 @@ bvh: src/bvh/CMakeFiles/bvh.dir/rule
 # codegen rule for target.
 src/bvh/CMakeFiles/bvh.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f src/bvh/CMakeFiles/bvh.dir/build.make src/bvh/CMakeFiles/bvh.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=1,2 "Finished codegen for target bvh"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=1,2,3 "Finished codegen for target bvh"
 .PHONY : src/bvh/CMakeFiles/bvh.dir/codegen
 
 # clean rule for target.
@@ -213,7 +213,7 @@ src/bvh/CMakeFiles/bvh.dir/clean:
 src/raytracer/CMakeFiles/raytracer.dir/all:
 	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/depend
 	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=5,6,7 "Built target raytracer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=6,7,8 "Built target raytracer"
 .PHONY : src/raytracer/CMakeFiles/raytracer.dir/all
 
 # Build rule for subdir invocation for target.
@@ -230,7 +230,7 @@ raytracer: src/raytracer/CMakeFiles/raytracer.dir/rule
 # codegen rule for target.
 src/raytracer/CMakeFiles/raytracer.dir/codegen:
 	$(MAKE) $(MAKESILENT) -f src/raytracer/CMakeFiles/raytracer.dir/build.make src/raytracer/CMakeFiles/raytracer.dir/codegen
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=5,6,7 "Finished codegen for target raytracer"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/growlithe/Portfolio/Raytracer---LBVH/build/CMakeFiles --progress-num=6,7,8 "Finished codegen for target raytracer"
 .PHONY : src/raytracer/CMakeFiles/raytracer.dir/codegen
 
 # clean rule for target.

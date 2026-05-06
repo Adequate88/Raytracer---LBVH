@@ -1,21 +1,11 @@
 #pragma once
 
-#include "morton.h"
-#include "bvh.h"
 #include "aabb_refactored.h"
+#include "bvh_utils.h"
 #include "hittable.h"
 #include "hittable_list.h"
 #include "sphere.h"
-
-#include <algorithm>
-#include <memory>
-#include <vector>
-#include <cstdint>
-#include <chrono>
-#include <fstream>
-#include <iostream>
-#include <sstream>
-#include <iomanip>
+#include "types.h"
 
 #define CL_TARGET_OPENCL_VERSION 120
 #include <CL/cl.h>
@@ -57,7 +47,7 @@ class LBVH {
 
     void enable_statistics() const; 
     void disable_statistics() const;
-    const bvh_stats& get_stats() const;
+    const BVHStats& get_stats() const;
     void increment_ray_count() const;
 
     double get_construction_time() const;
@@ -116,7 +106,7 @@ class LBVH {
     uint32_t k = 10;
     uint32_t cell_count = 0;
 
-    mutable bvh_stats stats;
+    mutable BVHStats stats;
     mutable bool enable_stats = false;
 
     double construction_time_ms = 0.0;

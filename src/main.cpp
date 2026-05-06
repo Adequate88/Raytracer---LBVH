@@ -50,88 +50,6 @@ scene_config load_bunny(int image_width, int samples) {
     return config;
 }
 
-scene_config load_armadillo(int image_width, int samples) {
-    scene_config config;
-    config.name = "armadillo";
-
-    auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
-    auto mesh_triangles = mesh::load_obj(MODELS_DIR + "armadillo.obj", mat, true, 0.01);
-
-    for (auto& tri : mesh_triangles->objects) {
-        config.world.add(tri);
-    }
-    config.triangle_count = config.world.objects.size();
-
-    // Camera setup for armadillo
-    config.cam.aspect_ratio      = 16.0 / 9.0;
-    config.cam.image_width       = image_width;
-    config.cam.samples_per_pixel = samples;
-    config.cam.max_depth         = 10;
-    config.cam.background        = color(0.70, 0.80, 1.00);
-    config.cam.vfov              = 30;
-    config.cam.lookfrom          = point3(0, 0.02, -0.08);
-    config.cam.lookat            = point3(0, 0.005, 0);
-    config.cam.vup               = vec3(0, 1, 0);
-    config.cam.defocus_angle     = 0;
-    config.cam.focus_dist        = 4.0;
-
-    return config;
-}
-
-scene_config load_dragon(int image_width, int samples) {
-    scene_config config;
-    config.name = "dragon";
-
-    auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
-    auto mesh_triangles = mesh::load_obj(MODELS_DIR + "dragon.obj", mat, true, 10.0);
-
-    for (auto& tri : mesh_triangles->objects) {
-        config.world.add(tri);
-    }
-    config.triangle_count = config.world.objects.size();
-
-    // Camera setup for dragon
-    config.cam.aspect_ratio      = 16.0 / 9.0;
-    config.cam.image_width       = image_width;
-    config.cam.samples_per_pixel = samples;
-    config.cam.max_depth         = 10;
-    config.cam.background        = color(0.70, 0.80, 1.00);
-    config.cam.vfov              = 30;
-    config.cam.lookfrom          = point3(-18, 6, -18);
-    config.cam.lookat            = point3(0, 0.05, 0);
-    config.cam.vup               = vec3(0, 1, 0);
-    config.cam.defocus_angle     = 0;
-    config.cam.focus_dist        = 0.3;
-
-    return config;
-}
-
-scene_config load_lucy(int image_width, int samples) {
-    scene_config config;
-    config.name = "lucy";
-
-    auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
-    auto mesh_triangles = mesh::load_obj(MODELS_DIR + "lucy.obj", mat, true, 0.001);
-
-    for (auto& tri : mesh_triangles->objects) {
-        config.world.add(tri);
-    }
-    config.triangle_count = config.world.objects.size();
-
-    config.cam.aspect_ratio      = 16.0 / 9.0;
-    config.cam.image_width       = image_width;
-    config.cam.samples_per_pixel = samples;
-    config.cam.max_depth         = 10;
-    config.cam.background        = color(0.70, 0.80, 1.00);
-    config.cam.vfov              = 30;
-    config.cam.lookfrom          = point3(0, 1, -3.5);
-    config.cam.lookat            = point3(-0.2, 0.2, 0);
-    config.cam.vup               = vec3(0, 1, 0);
-    config.cam.defocus_angle     = 0;
-    config.cam.focus_dist        = 3.0;
-
-    return config;
-}
 
 // Run experiment with a specific BVH type
 template<typename BVH>
@@ -194,20 +112,6 @@ int main() {
         run_experiment(config);
     }
 
-    {
-        auto config = load_armadillo(IMAGE_WIDTH, SAMPLES);
-        run_experiment(config);
-    }
-
-    {
-        //auto config = load_dragon(IMAGE_WIDTH, SAMPLES);
-        //run_experiment(config);
-    }
-
-    {
-        //auto config = load_lucy(IMAGE_WIDTH, SAMPLES);
-        //run_experiment(config);
-    }
 
     std::clog << "All experiments complete\n";
 

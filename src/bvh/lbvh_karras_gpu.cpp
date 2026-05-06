@@ -135,7 +135,7 @@ bool LBVH::hit(const ray& r, interval ray_t, hit_record& rec) const {
 
 void LBVH::enable_statistics() const { enable_stats = true; stats.reset(); }
 void LBVH::disable_statistics() const { enable_stats = false; }
-const bvh_stats& LBVH::get_stats() const { return stats; }
+const BVHStats& LBVH::get_stats() const { return stats; }
 void LBVH::increment_ray_count() const { if (enable_stats) stats.rays_traced++; }
 
 double LBVH::get_construction_time() const { return construction_time_ms; }
