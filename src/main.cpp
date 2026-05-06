@@ -1,4 +1,4 @@
-#include "lbvh_karras_gpu.h"
+#include "lbvh_gpu.h"
 #include "camera.h"
 #include "hittable.h"
 #include "hittable_list.h"

@@ -1,4 +1,4 @@
-#include "lbvh_karras_gpu.h"
+#include "lbvh_gpu.h"
 
 LBVH::LBVH(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(objects.size())
 {
