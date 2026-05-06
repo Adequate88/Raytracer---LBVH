@@ -1,5 +1,6 @@
-# Ignore output data 
+# Ignore output data and models
 data/*
+models/*
 
 # Ignore build directory
 build/
