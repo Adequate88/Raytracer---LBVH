@@ -1,5 +1,6 @@
 
 add_executable(engine
+  utils/stb_image.cpp
   main.cpp
 )
 

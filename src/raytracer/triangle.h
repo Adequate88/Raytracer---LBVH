@@ -1,6 +1,6 @@
 #pragma once
 
-#include "aabb_refactored.h"
+#include "aabb.h"
 #include "hittable.h"
 #include "material.h"
 #include <cmath>

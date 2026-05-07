@@ -1,6 +1,5 @@
 add_library(raytracer STATIC
-  aabb_refactored.cpp
-  interval.cpp
+  camera.cpp
 )
 
 target_link_libraries(raytracer PRIVATE bvh OpenCL::OpenCL)

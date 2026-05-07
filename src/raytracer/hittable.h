@@ -1,7 +1,7 @@
 #ifndef HITTABLE_H
 #define HITTABLE_H
 
-#include "aabb_refactored.h"
+#include "aabb.h"
 
 
 class material;

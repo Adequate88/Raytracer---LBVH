@@ -1,11 +1,11 @@
 #pragma once
 
-#include "aabb_refactored.h"
+#include "aabb.h"
 #include "triangle.h"
 #include "hittable_list.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
-#include "../external/tinyobjloader.h"
+#include "tinyobjloader.h"
 
 #include <string>
 #include <iostream>

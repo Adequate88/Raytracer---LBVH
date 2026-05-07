@@ -1,6 +1,6 @@
 #pragma once
 
-#include "aabb_refactored.h"
+#include "aabb.h"
 #include "bvh_utils.h"
 #include "hittable.h"
 #include "hittable_list.h"

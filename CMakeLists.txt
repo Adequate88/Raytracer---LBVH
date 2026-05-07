@@ -18,5 +18,6 @@ find_package(OpenCL REQUIRED)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 
 include_directories(src)
-include_directories(external)
+include_directories(src/utils)
+
 add_subdirectory(src)

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "bvh_utils.h"
-#include "aabb_refactored.h"
+#include "aabb.h"
 #include "hittable.h"
 #include "hittable_list.h"
 #include "types.h"
