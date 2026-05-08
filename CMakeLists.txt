@@ -21,3 +21,6 @@ include_directories(src)
 include_directories(src/utils)
 
 add_subdirectory(src)
+
+
+option(EVALUATE "Measure metrics of engine" ON)
