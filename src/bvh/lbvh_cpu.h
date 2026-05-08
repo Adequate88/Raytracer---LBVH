@@ -35,9 +35,6 @@ class LBVHCpu {
     bool hit(const ray& r, interval ray_t, hit_record& rec) const;
     
 
-    void enable_statistics() const;
-    void disable_statistics() const;
-    const BVHStats& get_stats() const;
     void increment_ray_count() const;
     double get_construction_time() const;
     double get_morton_time() const;
@@ -49,8 +46,6 @@ class LBVHCpu {
     const std::vector<shared_ptr<hittable>>& get_objects() const;
     int get_primitive_count() const;
 
-    void export_statistics(const std::string& filename, long long total_rays,
-                           double avg_box_tests, double avg_prim_tests) const;
   private:
     std::vector<shared_ptr<hittable>>& objects;
     int N = 0;
@@ -64,8 +59,6 @@ class LBVHCpu {
     uint32_t k = 10;
     uint32_t cell_count = 0;
 
-    mutable BVHStats stats;
-    mutable bool enable_stats = false;
 
     double construction_time_ms = 0.0;
     double morton_time_ms = 0.0;

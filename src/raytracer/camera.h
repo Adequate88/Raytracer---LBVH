@@ -20,13 +20,7 @@ class camera {
     double defocus_angle = 0;
     double focus_dist = 10;
 
-    std::string scene_name_for_stats = "";
-
     void render(LBVH& world);
-
-    long long get_total_rays() const;
-    double get_avg_box_tests() const;
-    double get_avg_prim_tests() const; 
 
     int get_image_height() const;
     point3 get_center() const;
@@ -50,9 +44,7 @@ class camera {
     vec3   defocus_disk_u;
     vec3   defocus_disk_v;
 
-    long long last_total_rays = 0;
-    double last_avg_box_tests = 0.0;
-    double last_avg_prim_tests = 0.0;
+
 
     void initialize();
 

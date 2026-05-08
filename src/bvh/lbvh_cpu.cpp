@@ -63,38 +63,10 @@ bool LBVHCpu::hit(const ray& r, interval ray_t, hit_record& rec) const
   return hit_recursive(r, ray_t, rec, 0);
 }
 
-void LBVHCpu::enable_statistics() const { enable_stats = true; stats.reset(); }
-void LBVHCpu::disable_statistics() const { enable_stats = false; }
-const BVHStats& LBVHCpu::get_stats() const { return stats; }
-void LBVHCpu::increment_ray_count() const { if (enable_stats) stats.rays_traced++; }
-double LBVHCpu::get_construction_time() const { return construction_time_ms; }
-double LBVHCpu::get_morton_time() const { return morton_time_ms; }
-double LBVHCpu::get_sort_time() const { return sort_time_ms; }
-double LBVHCpu::get_hierarchy_time() const { return hierarchy_time_ms; }
-double LBVHCpu::get_bbox_time() const { return bbox_time_ms; }
 int LBVHCpu::get_tree_depth() const { return compute_depth(0); }
 const std::vector<lbvh_karras_node>& LBVHCpu::get_nodes() const { return nodes; }
 const std::vector<shared_ptr<hittable>>& LBVHCpu::get_objects() const { return objects; }
 int LBVHCpu::get_primitive_count() const { return N; }
-
-void LBVHCpu::export_statistics(const std::string& filename, long long total_rays,
-                       double avg_box_tests, double avg_prim_tests) const {
-    std::ofstream out(filename);
-    if (!out.is_open()) {
-        std::cerr << "Failed to open: " << filename << std::endl;
-        return;
-    }
-    out << std::fixed << std::setprecision(3);
-    out << "morton_code_ms," << morton_time_ms << "\n";
-    out << "radix_sort_ms," << sort_time_ms << "\n";
-    out << "hierarchy_ms," << hierarchy_time_ms << "\n";
-    out << "bbox_propagation_ms," << bbox_time_ms << "\n";
-    out << "total_construction_ms," << construction_time_ms << "\n";
-    out << "total_rays," << total_rays << "\n";
-    out << "avg_box_tests_per_ray," << avg_box_tests << "\n";
-    out << "avg_prim_tests_per_ray," << avg_prim_tests << "\n";
-    out.close();
-}
 
 inline int LBVHCpu::clz(uint32_t x) const {
         if (x == 0) return 32;
@@ -212,13 +184,13 @@ void LBVHCpu::build_bboxes_from_leaf(int leaf_idx) {
 
 bool LBVHCpu::hit_recursive(const ray& r, interval ray_t, hit_record& rec, int node_idx) const {
     if (node_idx >= 2*N - 1 || node_idx < 0) return false;
-    if (enable_stats) stats.node_visits++;
+    //TODO NodesVisisted++
 
     const lbvh_karras_node& node = nodes[node_idx];
     if (!node.bbox.hit(r, ray_t)) return false;
 
     if (node.is_leaf()) {
-        if (enable_stats) stats.primitive_tests++;
+        // TODO PRIMITIVES VISITED ++
         return objects[node.primitive_id]->hit(r, ray_t, rec);
     }
 

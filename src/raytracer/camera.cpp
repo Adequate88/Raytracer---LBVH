@@ -1,4 +1,5 @@
 #include "camera.h"
+#include "metrics_macros.h"
 
 
 void camera::render(LBVH& world) {
@@ -11,7 +12,7 @@ void camera::render(LBVH& world) {
             color pixel_color(0,0,0);
             for (int sample = 0; sample < samples_per_pixel; sample++) {
                 ray r = get_ray(i, j);
-                world.increment_ray_count();  // Track ray count if stats enabled
+                METRIC_INCREMENT("RAY_COUNT");
                 pixel_color += ray_color(r, max_depth, world);
             }
             write_color(std::cout, pixel_samples_scale * pixel_color);
@@ -20,11 +21,6 @@ void camera::render(LBVH& world) {
 
     std::clog << "\rDone.                 \n";
 }
-
-
-long long camera::get_total_rays() const { return last_total_rays; }
-double camera::get_avg_box_tests() const { return last_avg_box_tests; }
-double camera::get_avg_prim_tests() const { return last_avg_prim_tests; }
 
 int camera::get_image_height() const { return image_height; }
 point3 camera::get_center() const { return center; }

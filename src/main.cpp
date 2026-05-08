@@ -1,5 +1,6 @@
 #include "lbvh_gpu.h"
 #include "camera.h"
+#include "metrics_macros.h"
 #include "mesh.h"
 
 #include <chrono>
@@ -62,19 +63,16 @@ void run_single_experiment(
     BVH bvh_tree(world.objects);
 
     // Render
-    auto render_start = std::chrono::high_resolution_clock::now();
+    METRIC_START_TIME("RENDER_TIME");
     cam.render(bvh_tree);
-    auto render_end = std::chrono::high_resolution_clock::now();
-    double render_ms = std::chrono::duration<double, std::milli>(render_end - render_start).count();
+    METRIC_END_TIME("RENDER_TIME");
 
     // Get stats from camera (populated by GPU renderer)
-    long long total_rays = cam.get_total_rays();
-    double avg_box = cam.get_avg_box_tests();
-    double avg_prim = cam.get_avg_prim_tests();
+    // TODO GET STATS FROM CAMERA
 
     // Export stats
+    // TODO EXPORT STATS
     std::string filename = "data/" + output_prefix + "_" + bvh_name + ".csv";
-    bvh_tree.export_statistics(filename, total_rays, avg_box, avg_prim);
 }
 
 // Run full experiment comparing all BVH types on a scene
@@ -101,8 +99,9 @@ void run_experiment(scene_config& config) {
 int main() {
     std::clog << "BVH Performance Comparison\n\n";
 
-    const int IMAGE_WIDTH = 1280;
-    const int SAMPLES = 100;
+
+    const int IMAGE_WIDTH = 720;
+    const int SAMPLES = 20;
 
     {
         auto config = load_bunny(IMAGE_WIDTH, SAMPLES);

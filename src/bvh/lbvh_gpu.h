@@ -45,21 +45,6 @@ class LBVH {
 
     bool hit(const ray& r, interval ray_t, hit_record& rec) const;
 
-    void enable_statistics() const; 
-    void disable_statistics() const;
-    const BVHStats& get_stats() const;
-    void increment_ray_count() const;
-
-    double get_construction_time() const;
-    double get_opencl_init_time() const;
-    double get_morton_time() const;
-    double get_sort_time() const;
-    double get_hierarchy_time() const;
-    double get_bbox_time() const;
-
-    void export_statistics(const std::string& filename, long long total_rays,
-                           double avg_box_tests, double avg_prim_tests) const;
-
     int get_tree_depth() const;
 
     cl_context get_opencl_context() const;
@@ -105,17 +90,6 @@ class LBVH {
     std::vector<morton_primitive> morton_list;
     uint32_t k = 10;
     uint32_t cell_count = 0;
-
-    mutable BVHStats stats;
-    mutable bool enable_stats = false;
-
-    double construction_time_ms = 0.0;
-    double opencl_init_time_ms = 0.0;
-    double data_prep_time_ms = 0.0;
-    double morton_time_ms = 0.0;
-    double sort_time_ms = 0.0;
-    double hierarchy_time_ms = 0.0;
-    double bbox_time_ms = 0.0;
 
     bool hit_recursive(const ray& r, interval ray_t, hit_record& rec, const int node_idx) const;
 

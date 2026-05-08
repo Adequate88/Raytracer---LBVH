@@ -1,18 +1,18 @@
 #include "lbvh_gpu.h"
+#include "metrics_macros.h"
 
 LBVH::LBVH(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(objects.size())
 {
   nodes.resize(2*N - 1);
-  auto start_time = std::chrono::high_resolution_clock::now();
+  METRIC_START_TIME("BVH_CONSTRUCTION_TIME"); 
 
   if (N == 0) return;
 
-  auto phase_start = std::chrono::high_resolution_clock::now();
+  METRIC_START_TIME("OPENCL_INIT");
   init_opencl();
-  auto phase_end = std::chrono::high_resolution_clock::now();
-  opencl_init_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
-
-  phase_start = std::chrono::high_resolution_clock::now();
+  METRIC_END_TIME("OPENCL_INIT");
+  
+  METRIC_START_TIME("BVH_DATA_PREP");
   morton_list.resize(N);
   cell_count = 1 << k;
 
@@ -44,10 +44,9 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(obj
   buf_nodes = clCreateBuffer(context, CL_MEM_READ_WRITE,
                        (2*N - 1) * sizeof(lbvh_node), nullptr, &err);
   check_cl_error(err, "clCreateBuffer(buf_nodes)");
-  phase_end = std::chrono::high_resolution_clock::now();
-  data_prep_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+  METRIC_END_TIME("BVH_DATA_PREP");
 
-  phase_start = std::chrono::high_resolution_clock::now();
+  METRIC_START_TIME("MORTON_TIME");
   err = clSetKernelArg(kernel_morton, 0, sizeof(cl_mem), &buf_centroids);
   err |= clSetKernelArg(kernel_morton, 1, sizeof(AABB), &temp_scene_bbox);
   err |= clSetKernelArg(kernel_morton, 2, sizeof(int), &N);
@@ -65,18 +64,16 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(obj
   err = clEnqueueReadBuffer(queue, buf_morton_list, CL_TRUE, 0,
                       N * sizeof(morton_primitive), morton_list.data(), 0, nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(buf_morton_list)");
-  phase_end = std::chrono::high_resolution_clock::now();
-  morton_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+  METRIC_END_TIME("MORTON_TIME");
 
-  phase_start = std::chrono::high_resolution_clock::now();
+  METRIC_START_TIME("RADIX_SORT_TIME");
   radix_sort();
   err = clEnqueueReadBuffer(queue, buf_morton_list, CL_TRUE, 0,
                       N * sizeof(morton_primitive), morton_list.data(), 0, nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(sorted morton_list)");
-  phase_end = std::chrono::high_resolution_clock::now();
-  sort_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
-
-  phase_start = std::chrono::high_resolution_clock::now();
+  METRIC_END_TIME("RADIX_SORT_TIME");
+ 
+  METRIC_START_TIME("HIERARCHY_TIME");
   err = clSetKernelArg(kernel_init_leaves, 0, sizeof(cl_mem), &buf_morton_list);
   err |= clSetKernelArg(kernel_init_leaves, 1, sizeof(cl_mem), &buf_bboxes);
   err |= clSetKernelArg(kernel_init_leaves, 2, sizeof(int), &N);
@@ -102,10 +99,9 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(obj
   err = clEnqueueReadBuffer(queue, buf_nodes, CL_TRUE, 0,
                             (2*N - 1) * sizeof(lbvh_node), nodes.data(), 0, nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(buf_nodes)");
-  phase_end = std::chrono::high_resolution_clock::now();
-  hierarchy_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+  METRIC_END_TIME("HIERARCHY_TIME");
 
-  phase_start = std::chrono::high_resolution_clock::now();
+  METRIC_START_TIME("BBOX_TIME");
   err = clSetKernelArg(kernel_build_bboxes, 0, sizeof(cl_mem), &buf_nodes);
   err |= clSetKernelArg(kernel_build_bboxes, 1, sizeof(int), &N);
   check_cl_error(err, "clSetKernelArg(kernel_build_bboxes)");
@@ -117,11 +113,9 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(obj
   err = clEnqueueReadBuffer(queue, buf_nodes, CL_TRUE, 0,
                       (2*N - 1) * sizeof(lbvh_node), nodes.data(), 0, nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(buf_nodes after bbox)");
-  phase_end = std::chrono::high_resolution_clock::now();
-  bbox_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+  METRIC_END_TIME("BBOX_TIME");
 
-  auto end_time = std::chrono::high_resolution_clock::now();
-  construction_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
+  METRIC_END_TIME("BVH_CONSTRUCTION_TIME");
 }
 
 LBVH::~LBVH() 
@@ -133,18 +127,6 @@ bool LBVH::hit(const ray& r, interval ray_t, hit_record& rec) const {
   return hit_recursive(r, ray_t, rec, 0);
 }
 
-void LBVH::enable_statistics() const { enable_stats = true; stats.reset(); }
-void LBVH::disable_statistics() const { enable_stats = false; }
-const BVHStats& LBVH::get_stats() const { return stats; }
-void LBVH::increment_ray_count() const { if (enable_stats) stats.rays_traced++; }
-
-double LBVH::get_construction_time() const { return construction_time_ms; }
-double LBVH::get_opencl_init_time() const { return opencl_init_time_ms; }
-double LBVH::get_morton_time() const { return morton_time_ms; }
-double LBVH::get_sort_time() const { return sort_time_ms; }
-double LBVH::get_hierarchy_time() const { return hierarchy_time_ms; }
-double LBVH::get_bbox_time() const { return bbox_time_ms; }
-
 int LBVH::get_tree_depth() const { return compute_depth(0); }
 
 cl_context LBVH::get_opencl_context() const { return context; }
@@ -155,48 +137,19 @@ const std::vector<lbvh_node>& LBVH::get_nodes() const { return nodes; }
 int LBVH::get_primitive_count() const { return N; }
 const std::vector<shared_ptr<hittable>>& LBVH::get_objects() const { return objects; }
 
-void LBVH::export_statistics
-(
-  const std::string& filename, 
-  long long total_rays,
-  double avg_box_tests, 
-  double avg_prim_tests
-) const 
-{
-  std::ofstream out(filename);
-
-  if (!out.is_open())
-  {
-      std::cerr << "Failed to open: " << filename << std::endl;
-      return;
-  }
-
-  out << std::fixed << std::setprecision(3);
-  out << "opencl_init_ms," << opencl_init_time_ms << "\n";
-  out << "data_prep_ms," << data_prep_time_ms << "\n";
-  out << "morton_code_ms," << morton_time_ms << "\n";
-  out << "radix_sort_ms," << sort_time_ms << "\n";
-  out << "hierarchy_ms," << hierarchy_time_ms << "\n";
-  out << "bbox_propagation_ms," << bbox_time_ms << "\n";
-  out << "total_construction_ms," << construction_time_ms << "\n";
-  out << "total_rays," << total_rays << "\n";
-  out << "avg_box_tests_per_ray," << avg_box_tests << "\n";
-  out << "avg_prim_tests_per_ray," << avg_prim_tests << "\n";
-  out.close();
-}
 
 
 bool LBVH::hit_recursive(const ray& r, interval ray_t, hit_record& rec, const int node_idx) const
 {
   if (node_idx >= 2*N - 1 || node_idx < 0) return false;
-  if (enable_stats) stats.node_visits++;
+  METRIC_INCREMENT("NODES_VISITED");
 
   const lbvh_node& node = nodes[node_idx];
   if (!node.bbox.hit(r, ray_t)) return false;
 
   if (node.is_leaf())
   {
-    if (enable_stats) stats.primitive_tests++;
+    METRIC_INCREMENT("PRIMITIVE_TESTS");
     return objects[node.primitive_id]->hit(r, ray_t, rec);
   }
 
