@@ -22,16 +22,6 @@ class camera {
 
     void render(LBVH& world);
 
-    int get_image_height() const;
-    point3 get_center() const;
-    point3 get_pixel00_loc() const;
-    vec3 get_pixel_delta_u() const;
-    vec3 get_pixel_delta_v() const;
-    int get_samples_per_pixel() const;
-    int get_max_depth() const;
-    vec3 get_defocus_disk_u() const;
-    vec3 get_defocus_disk_v() const;
-    double get_defocus_angle() const;
 
   private:
     int    image_height;

@@ -22,18 +22,6 @@ void camera::render(LBVH& world) {
     std::clog << "\rDone.                 \n";
 }
 
-int camera::get_image_height() const { return image_height; }
-point3 camera::get_center() const { return center; }
-point3 camera::get_pixel00_loc() const { return pixel00_loc; }
-vec3 camera::get_pixel_delta_u() const { return pixel_delta_u; }
-vec3 camera::get_pixel_delta_v() const { return pixel_delta_v; }
-int camera::get_samples_per_pixel() const { return samples_per_pixel; }
-int camera::get_max_depth() const { return max_depth; }
-vec3 camera::get_defocus_disk_u() const { return defocus_disk_u; }
-vec3 camera::get_defocus_disk_v() const { return defocus_disk_v; }
-double camera::get_defocus_angle() const { return defocus_angle; }
-
-
 void camera::initialize() {
     image_height = int(image_width / aspect_ratio);
     image_height = (image_height < 1) ? 1 : image_height;

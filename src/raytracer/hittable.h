@@ -1,8 +1,6 @@
-#ifndef HITTABLE_H
-#define HITTABLE_H
+#pragma once
 
 #include "aabb.h"
-
 
 class material;
 
@@ -162,5 +160,3 @@ class rotate_y : public hittable {
     AABB bbox;
 };
 
-
-#endif

@@ -1,4 +1,3 @@
-#pragma once
 //==============================================================================================
 // Originally written in 2020 by Peter Shirley <ptrshrl@gmail.com>
 //
@@ -9,6 +8,7 @@
 // You should have received a copy (see file COPYING.txt) of the CC0 Public Domain Dedication
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
+#pragma once
 
 #include "interval.h"
 #include "vec3.h"

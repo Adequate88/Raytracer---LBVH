@@ -2,12 +2,12 @@
 #include "camera.h"
 #include "metrics_macros.h"
 #include "mesh.h"
+#include "types.h"
 
-#include <chrono>
-#include <fstream>
-#include <iomanip>
-#include <iostream>
-#include <string>
+const int IMAGE_WIDTH = 720;
+const int SAMPLES = 20;
+
+
 
 // Model paths
 const std::string MODELS_DIR = "models/";
@@ -51,20 +51,14 @@ scene_config load_bunny(int image_width, int samples) {
 
 // Run experiment with a specific BVH type
 template<typename BVH>
-void run_single_experiment(
-    hittable_list& world,
-    camera& cam,
-    const std::string& bvh_name,
-    const std::string& output_prefix
-) {
-    std::clog << "\n--- " << bvh_name << " ---\n";
-
+void run_experiment(scene_config conf, const std::string& output_prefix)
+{
     // Build BVH
-    BVH bvh_tree(world.objects);
+    BVH bvh_tree(conf.world.objects);
 
     // Render
     METRIC_START_TIME("RENDER_TIME");
-    cam.render(bvh_tree);
+    conf.cam.render(bvh_tree);
     METRIC_END_TIME("RENDER_TIME");
 
     // Get stats from camera (populated by GPU renderer)
@@ -72,44 +66,13 @@ void run_single_experiment(
 
     // Export stats
     // TODO EXPORT STATS
-    std::string filename = "data/" + output_prefix + "_" + bvh_name + ".csv";
-}
-
-// Run full experiment comparing all BVH types on a scene
-void run_experiment(scene_config& config) {
-    std::clog << "Model: " << config.name << "\n";
-   
-    // 1. Karras GPU LBVH
-    {
-        std::streambuf* orig = std::cout.rdbuf();
-        std::ofstream out("data/" + config.name + "_karras_gpu.ppm");
-        std::cout.rdbuf(out.rdbuf());
-
-        run_single_experiment<LBVH>(config.world, config.cam, "karras_gpu", config.name);
-
-        std::cout.rdbuf(orig);
-    }
-
-    
-
-    std::clog << "\nExperiment '" << config.name << "' complete.\n";
-    std::clog << "Results saved to data/\n";
+    std::string filename = "data/" + output_prefix + ".csv";
 }
 
 int main() {
-    std::clog << "BVH Performance Comparison\n\n";
 
-
-    const int IMAGE_WIDTH = 720;
-    const int SAMPLES = 20;
-
-    {
-        auto config = load_bunny(IMAGE_WIDTH, SAMPLES);
-        run_experiment(config);
-    }
-
-
-    std::clog << "All experiments complete\n";
+    auto config = load_bunny(IMAGE_WIDTH, SAMPLES);
+    run_experiment<LBVH>(config, "BASELINE");
 
     return 0;
 }

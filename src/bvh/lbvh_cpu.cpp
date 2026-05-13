@@ -1,37 +1,63 @@
 #include "lbvh_cpu.h"
+#include "metrics_macros.h"
 
 
 LBVHCpu::LBVHCpu(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(objects.size()) 
 {
-    nodes.resize(2*N - 1);
-    auto start_time = std::chrono::high_resolution_clock::now();
+  init();   
+}
 
+void LBVHCpu::init()
+{
+    nodes.resize(2*N - 1);
     if (N == 0) return;
+
+    METRIC_START_TIME("BVH_CONSTRUCTION");
 
     morton_list.resize(N);
     cell_count = 1 << k;
 
+    init_scene_bbox();
+
+    METRIC_START_TIME("MORTON_TIME");
+    compute_mortons();
+    METRIC_END_TIME("MORTON_TIME");
+
+    METRIC_START_TIME("RADIX_SORT"); 
+    radix_sort();
+    METRIC_END_TIME("RADIX_SORT");
+
+    METRIC_START_TIME("HIERARCHY");
+    build_hierarchy();
+    METRIC_END_TIME("HIERARCHY");
+
+    METRIC_START_TIME("BUILD_BBOX");
+    build_bboxes();
+    METRIC_END_TIME("BUILD_BBOX");
+
+    METRIC_END_TIME("BVH_CONSTRUCTION");
+}
+
+void LBVHCpu::init_scene_bbox()
+{
     temp_scene_bbox = AABB::empty;
     for (int i = 0; i < N; i++) {
         temp_scene_bbox = AABB(temp_scene_bbox, objects[i]->bounding_box());
         primitive_bboxes.push_back(objects[i]->bounding_box());
     }
+}
 
-    auto phase_start = std::chrono::high_resolution_clock::now();
+void LBVHCpu::compute_mortons()
+{
     for (int i = 0; i < N; i++) {
         morton_list[i].morton_code = compute_morton(objects[i]->get_centroid());
         morton_list[i].primitive_id = i;
     }
-    auto phase_end = std::chrono::high_resolution_clock::now();
-    morton_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+}
 
-    phase_start = std::chrono::high_resolution_clock::now();
-    radix_sort();
-    phase_end = std::chrono::high_resolution_clock::now();
-    sort_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
-
-    phase_start = std::chrono::high_resolution_clock::now();
-    for (int i = 0; i < N; i++) {
+void LBVHCpu::build_hierarchy()
+{
+  for (int i = 0; i < N; i++) {
         int leaf_idx = N - 1 + i;
         int prim_id = morton_list[i].primitive_id;
         nodes[leaf_idx].bbox = primitive_bboxes[prim_id];
@@ -44,18 +70,13 @@ LBVHCpu::LBVHCpu(std::vector<shared_ptr<hittable>>& objects) : objects(objects),
     for (int node_idx = 0; node_idx < N - 1; node_idx++) {
         create_hierarchy_for_node(node_idx);
     }
-    phase_end = std::chrono::high_resolution_clock::now();
-    hierarchy_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
+}
 
-    phase_start = std::chrono::high_resolution_clock::now();
+void LBVHCpu::build_bboxes()
+{
     for (int leaf_idx = 0; leaf_idx < N; leaf_idx++) {
         build_bboxes_from_leaf(leaf_idx);
     }
-    phase_end = std::chrono::high_resolution_clock::now();
-    bbox_time_ms = std::chrono::duration<double, std::milli>(phase_end - phase_start).count();
-
-    auto end_time = std::chrono::high_resolution_clock::now();
-    construction_time_ms = std::chrono::duration<double, std::milli>(end_time - start_time).count();
 }
 
 bool LBVHCpu::hit(const ray& r, interval ray_t, hit_record& rec) const

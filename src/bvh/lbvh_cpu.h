@@ -34,19 +34,18 @@ class LBVHCpu {
 
     bool hit(const ray& r, interval ray_t, hit_record& rec) const;
     
-
-    void increment_ray_count() const;
-    double get_construction_time() const;
-    double get_morton_time() const;
-    double get_sort_time() const;
-    double get_hierarchy_time() const;
-    double get_bbox_time() const;
     int get_tree_depth() const;
     const std::vector<lbvh_karras_node>& get_nodes() const;
     const std::vector<shared_ptr<hittable>>& get_objects() const;
     int get_primitive_count() const;
 
   private:
+    void init();
+    void init_scene_bbox();
+    void compute_mortons();
+    void build_hierarchy();
+    void build_bboxes();
+
     std::vector<shared_ptr<hittable>>& objects;
     int N = 0;
 
@@ -59,15 +58,7 @@ class LBVHCpu {
     uint32_t k = 10;
     uint32_t cell_count = 0;
 
-
-    double construction_time_ms = 0.0;
-    double morton_time_ms = 0.0;
-    double sort_time_ms = 0.0;
-    double hierarchy_time_ms = 0.0;
-    double bbox_time_ms = 0.0;
-
     inline int clz(uint32_t x) const;
-
     
     inline int delta(int i, int j) const;
     
@@ -82,9 +73,7 @@ class LBVHCpu {
     bool hit_recursive(const ray& r, interval ray_t, hit_record& rec, int node_idx) const;
 
     uint32_t compute_morton(point3 barycenter);
-
     void radix_sort();
-
     int compute_depth(int node_idx) const;
 };
 
