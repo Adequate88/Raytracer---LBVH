@@ -1,5 +1,4 @@
-#ifndef QUAD_H
-#define QUAD_H
+//
 //==============================================================================================
 // To the extent possible under law, the author(s) have dedicated all copyright and related and
 // neighboring rights to this software to the public domain worldwide. This software is
@@ -8,9 +7,11 @@
 // You should have received a copy (see file COPYING.txt) of the CC0 Public Domain Dedication
 // along with this software. If not, see <http://creativecommons.org/publicdomain/zero/1.0/>.
 //==============================================================================================
+#pragma once
 
 #include "hittable.h"
 #include "hittable_list.h"
+#include "aabb.h"
 
 
 class quad : public hittable {
@@ -31,12 +32,12 @@ class quad : public hittable {
 
     virtual void set_bounding_box() {
         // Compute the bounding box of all four vertices.
-        auto bbox_diagonal1 = aabb(Q, Q + u + v);
-        auto bbox_diagonal2 = aabb(Q + u, Q + v);
-        bbox = aabb(bbox_diagonal1, bbox_diagonal2);
+        auto bbox_diagonal1 = AABB(Q, Q + u + v);
+        auto bbox_diagonal2 = AABB(Q + u, Q + v);
+        bbox = AABB(bbox_diagonal1, bbox_diagonal2);
     }
 
-    aabb bounding_box() const override { return bbox; }
+    AABB bounding_box() const override { return bbox; }
 
     bool hit(const ray& r, interval ray_t, hit_record& rec) const override {
         auto denom = dot(normal, r.direction());
@@ -86,7 +87,7 @@ class quad : public hittable {
     vec3 u, v;
     vec3 w;
     shared_ptr<material> mat;
-    aabb bbox;
+    AABB bbox;
     vec3 normal;
     double D;
 };
@@ -117,4 +118,3 @@ inline shared_ptr<hittable_list> box(const point3& a, const point3& b, shared_pt
 }
 
 
-#endif

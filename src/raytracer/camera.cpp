@@ -85,8 +85,7 @@ point3 camera::defocus_disk_sample() const {
     return center + (p[0] * defocus_disk_u) + (p[1] * defocus_disk_v);
 }
 
-template<typename BVH>
-color camera::ray_color(const ray& r, int depth, const BVH& world) const {
+color camera::ray_color(const ray& r, int depth, const LBVH& world) const {
     // If we've exceeded the ray bounce limit, no more light is gathered.
     if (depth <= 0)
         return color(0,0,0);

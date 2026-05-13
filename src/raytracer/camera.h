@@ -46,7 +46,6 @@ class camera {
 
     point3 defocus_disk_sample() const;
 
-    template<typename BVH>
-    color ray_color(const ray& r, int depth, const BVH& world) const;
+    color ray_color(const ray& r, int depth, const LBVH& world) const;
 };
 
