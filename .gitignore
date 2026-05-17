@@ -8,5 +8,6 @@ build/
 *.ppm
 
 CMakeCache.txt
+*/CMakeFiles/
 
 
