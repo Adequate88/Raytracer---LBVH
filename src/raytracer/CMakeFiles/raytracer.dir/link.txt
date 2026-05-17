@@ -1,2 +1,0 @@
-/usr/bin/ar qc libraytracer.a CMakeFiles/raytracer.dir/camera.cpp.o
-/usr/bin/ranlib libraytracer.a

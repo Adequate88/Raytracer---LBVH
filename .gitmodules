@@ -1,3 +1,9 @@
 [submodule "external/external/fmt"]
 	path = external/external/fmt
 	url = https://github.com/fmtlib/fmt.git
+[submodule "external/fmt"]
+	path = external/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "external/vendored/SDL"]
+	path = external/vendored/SDL
+	url = https://github.com/libsdl-org/SDL.git

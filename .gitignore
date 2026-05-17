@@ -12,6 +12,10 @@ CMakeCache.txt
 */cmake_install.cmake
 */Makefile
 
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
 
 
 
