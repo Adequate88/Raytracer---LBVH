@@ -1,0 +1,2 @@
+/usr/bin/ar qc libvulkan_engine.a CMakeFiles/vulkan_engine.dir/vulkan_engine.cpp.o
+/usr/bin/ranlib libvulkan_engine.a

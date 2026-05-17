@@ -1,0 +1,2 @@
+/usr/bin/ar qc libbvh.a CMakeFiles/bvh.dir/lbvh_gpu.cpp.o CMakeFiles/bvh.dir/lbvh_cpu.cpp.o
+/usr/bin/ranlib libbvh.a
