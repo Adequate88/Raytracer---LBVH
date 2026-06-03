@@ -53,6 +53,7 @@ void VulkanEngine::init() {
 
   init_vulkan();
   init_swapchain();
+  init_commands();
 }
 
 void VulkanEngine::cleanup() {}
@@ -99,7 +100,7 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
   uint32_t deviceCount;
   VK_CHECK(vkEnumeratePhysicalDevices(_instance, &deviceCount, nullptr));
   if (deviceCount == 0) {
-    fmt::println("No suitable GPUS");
+    fmt::println("No suitable GPUS\n");
     return;
   }
 
@@ -191,9 +192,9 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
     VkPhysicalDeviceProperties2 deviceProperties{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
     vkGetPhysicalDeviceProperties2(_gpu, &deviceProperties);
-    fmt::print("GPU found: {}", deviceProperties.properties.deviceName);
+    fmt::print("GPU found: {}\n", deviceProperties.properties.deviceName);
   } else {
-    fmt::print("No valid GPUs found");
+    fmt::print("No valid GPUs found\n");
     return;
   }
 
@@ -205,7 +206,6 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
                                            familyProperties.data());
 
   VkBool32 surfaceSupported;
-  uint32_t queueIndex;
 
   for (uint32_t queueInd = 0; queueInd < familyProperties.size(); queueInd++) {
     if ((familyProperties[queueInd].queueFlags & VK_QUEUE_GRAPHICS_BIT) !=
@@ -213,7 +213,7 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
       VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(_gpu, queueInd, _surface,
                                                     &surfaceSupported));
       if (surfaceSupported) {
-        queueIndex = queueInd;
+        _queueFamilyIndex = queueInd;
         break;
       }
     }
@@ -223,7 +223,7 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
   VkDeviceQueueCreateInfo queueInfo{
       .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
       .pNext = nullptr,
-      .queueFamilyIndex = queueIndex,
+      .queueFamilyIndex = _queueFamilyIndex,
       .queueCount = 1,
       .pQueuePriorities = &queuePriority};
 
@@ -253,7 +253,7 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
   };
 
   VK_CHECK(vkCreateDevice(_gpu, &deviceInfo, nullptr, &_device));
-  vkGetDeviceQueue(_device, queueIndex, 0, &_graphicsQueue);
+  vkGetDeviceQueue(_device, _queueFamilyIndex, 0, &_graphicsQueue);
 }
 
 void VulkanEngine::init_swapchain() {
@@ -356,4 +356,45 @@ void VulkanEngine::init_swapchain() {
     VK_CHECK(vkCreateImageView(_device, &viewInfo, nullptr, &imageView));
     _swapchainImageViews.push_back(imageView);
   }
+}
+
+void VulkanEngine::init_commands() {
+  // Command Pool
+
+  VkCommandPoolCreateInfo poolInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+      .queueFamilyIndex = _queueFamilyIndex};
+  VK_CHECK(vkCreateCommandPool(_device, &poolInfo, nullptr, &_commandPool));
+
+  // Command Buffer
+  VkCommandBufferAllocateInfo bufferInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = _commandPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1};
+  VK_CHECK(vkAllocateCommandBuffers(_device, &bufferInfo, &_commandBuffer));
+}
+
+void VulkanEngine::record_buffer(uint32_t image_index) {
+  VkCommandBufferBeginInfo beginInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+}
+
+void VulkanEngine::transition_image() {}
+
+void VulkanEngine::init_placeholder() {
+  VkImageCreateInfo imageInfo{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+      .flags = VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT_KHR,
+      .imageType = VK_IMAGE_TYPE_2D,
+      .format = _swapchainSurfaceFormat.format,
+      .extent = {_windowExtent.width, _windowExtent.height, 0},
+      .mipLevels = 0,
+      .arrayLayers = 1,
+      .samples = VK_SAMPLE_COUNT_1_BIT,
+      .tiling = VK_IMAGE_TILING_OPTIMAL,
+
+  };
 }
