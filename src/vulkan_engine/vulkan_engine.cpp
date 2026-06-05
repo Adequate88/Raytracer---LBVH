@@ -54,9 +54,25 @@ void VulkanEngine::init() {
   init_vulkan();
   init_swapchain();
   init_commands();
+  create_sync_objects();
 }
 
 void VulkanEngine::cleanup() {}
+
+void VulkanEngine::draw_frame() {
+  VK_CHECK(vkWaitForFences(_device, 1, &_drawFence, VK_TRUE, UINT64_MAX));
+  VK_CHECK(vkResetFences(_device, 1, &_drawFence));
+
+  VkAcquireNextImageInfoKHR acquireInfo = {
+      .sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
+      .swapchain = _swapchain,
+      .timeout = UINT64_MAX,
+      .semaphore = _presentCompleteSemaphore};
+  uint32_t imageIndex;
+  VK_CHECK(vkAcquireNextImage2KHR(_device, &acquireInfo, &imageIndex));
+
+  record_buffer(imageIndex);
+}
 
 void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
                                    // cause my aim is to learn rn - later might
@@ -378,23 +394,86 @@ void VulkanEngine::init_commands() {
 
 void VulkanEngine::record_buffer(uint32_t image_index) {
   VkCommandBufferBeginInfo beginInfo{
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+
+  VK_CHECK(vkBeginCommandBuffer(_commandBuffer, &beginInfo));
+
+  transition_image_layout(image_index, VK_IMAGE_LAYOUT_UNDEFINED,
+                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+
+  VkClearValue clearColor = {VkClearColorValue{0.0f, 0.0f, 0.0f, 1.0f}};
+
+  VkRenderingAttachmentInfo attachmentInfo = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+      .imageView = _swapchainImageViews[image_index],
+      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+      .clearValue = clearColor};
+
+  VkRenderingInfo renderInfo = {
+      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+      .renderArea = {.offset = {0, 0}, .extent = _swapchainExtent},
+      .layerCount = 1,
+      .colorAttachmentCount = 1,
+      .pColorAttachments = &attachmentInfo};
+
+  vkCmdBeginRendering(_commandBuffer, &renderInfo);
+
+  transition_image_layout(image_index, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, {},
+                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+                          VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+
+  VK_CHECK(vkEndCommandBuffer(_commandBuffer));
 }
 
-void VulkanEngine::transition_image() {}
+void VulkanEngine::transition_image_layout(
+    uint32_t image_index, VkImageLayout old_layout, VkImageLayout new_layout,
+    VkAccessFlags2 src_access_flags, VkAccessFlags2 dst_access_flags,
+    VkPipelineStageFlags2 src_stage_flags,
+    VkPipelineStageFlags2 dst_stage_flags) {
 
-void VulkanEngine::init_placeholder() {
-  VkImageCreateInfo imageInfo{
-      .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-      .flags = VK_IMAGE_CREATE_2D_ARRAY_COMPATIBLE_BIT_KHR,
-      .imageType = VK_IMAGE_TYPE_2D,
-      .format = _swapchainSurfaceFormat.format,
-      .extent = {_windowExtent.width, _windowExtent.height, 0},
-      .mipLevels = 0,
-      .arrayLayers = 1,
-      .samples = VK_SAMPLE_COUNT_1_BIT,
-      .tiling = VK_IMAGE_TILING_OPTIMAL,
+  VkImageMemoryBarrier2 barrier{
+      .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+      .srcStageMask = src_stage_flags,
+      .srcAccessMask = src_access_flags,
+      .dstStageMask = dst_stage_flags,
+      .dstAccessMask = dst_access_flags,
+      .oldLayout = old_layout,
+      .newLayout = new_layout,
+      .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+      .image = _swapchainImages[image_index],
+      .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                           .baseMipLevel = 0,
+                           .levelCount = 1,
+                           .baseArrayLayer = 0,
+                           .layerCount = 1}};
+  VkDependencyInfo dependencyInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                                  .dependencyFlags = {},
+                                  .imageMemoryBarrierCount = 1,
+                                  .pImageMemoryBarriers = &barrier};
+  vkCmdPipelineBarrier2(_commandBuffer, &dependencyInfo);
+}
 
-  };
+void VulkanEngine::create_sync_objects() {
+
+  VkSemaphoreCreateInfo presentSemaphoreInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+  VK_CHECK(vkCreateSemaphore(_device, &presentSemaphoreInfo, nullptr,
+                             &_presentCompleteSemaphore));
+
+  VkSemaphoreCreateInfo renderFinishedSemaphoreInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+  VK_CHECK(vkCreateSemaphore(_device, &renderFinishedSemaphoreInfo, nullptr,
+                             &_renderFinishedSemaphore));
+
+  VkFenceCreateInfo drawInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
+                             .flags = VK_FENCE_CREATE_SIGNALED_BIT};
+  VK_CHECK(vkCreateFence(_device, &drawInfo, nullptr, &_drawFence));
 }

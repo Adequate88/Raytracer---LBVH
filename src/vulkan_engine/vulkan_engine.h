@@ -48,6 +48,11 @@ public:
 
   // Placeholder Image TODO :: REMOVE ONCE RAYTRACER IS BUILT IN
 
+  // Sync Objects
+  VkSemaphore _presentCompleteSemaphore = nullptr;
+  VkSemaphore _renderFinishedSemaphore = nullptr;
+  VkFence _drawFence = nullptr;
+
   VkImage placeholderImage;
   void write_image();
 
@@ -57,6 +62,15 @@ private:
   void init_commands();
   void init_placeholder(); // TODO :: DELETE ONCE RAYTRACER
 
-  void transition_image();
+  void create_sync_objects();
+
+  void transition_image_layout(uint32_t image_index, VkImageLayout old_layout,
+                               VkImageLayout new_layout,
+                               VkAccessFlags2 src_access_flags,
+                               VkAccessFlags2 dst_access_flags,
+                               VkPipelineStageFlags2 src_stage_flags,
+                               VkPipelineStageFlags2 dst_stage_flags);
   void record_buffer(uint32_t image_index);
+
+  void draw_frame();
 };
