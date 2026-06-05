@@ -26,10 +26,12 @@ void VulkanEngine::run() {
 
   while (!bQuit) {
     while (SDL_PollEvent(&e) != 0) {
+      draw_frame();
       if (e.type == SDL_EVENT_QUIT)
         bQuit = true;
     }
   }
+  VK_CHECK(vkDeviceWaitIdle(_device));
 }
 
 void VulkanEngine::init() {
@@ -60,18 +62,51 @@ void VulkanEngine::init() {
 void VulkanEngine::cleanup() {}
 
 void VulkanEngine::draw_frame() {
-  VK_CHECK(vkWaitForFences(_device, 1, &_drawFence, VK_TRUE, UINT64_MAX));
-  VK_CHECK(vkResetFences(_device, 1, &_drawFence));
+  VK_CHECK(vkWaitForFences(_device, 1, &_inFlightFences[frame_index], VK_TRUE,
+                           UINT64_MAX));
+  VK_CHECK(vkResetFences(_device, 1, &_inFlightFences[frame_index]));
 
-  VkAcquireNextImageInfoKHR acquireInfo = {
-      .sType = VK_STRUCTURE_TYPE_ACQUIRE_NEXT_IMAGE_INFO_KHR,
-      .swapchain = _swapchain,
-      .timeout = UINT64_MAX,
-      .semaphore = _presentCompleteSemaphore};
   uint32_t imageIndex;
-  VK_CHECK(vkAcquireNextImage2KHR(_device, &acquireInfo, &imageIndex));
+  VK_CHECK(vkAcquireNextImageKHR(_device, _swapchain, UINT64_MAX,
+                                 _presentCompleteSemaphores[frame_index],
+                                 VK_NULL_HANDLE, &imageIndex));
 
+  vkResetCommandBuffer(_commandBuffers[frame_index], {});
   record_buffer(imageIndex);
+
+  VkCommandBufferSubmitInfo bufferInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .commandBuffer = _commandBuffers[frame_index],
+      .deviceMask = 0};
+  VkSemaphoreSubmitInfo presentSemaphoreInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = _presentCompleteSemaphores[frame_index],
+      .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT};
+  VkSemaphoreSubmitInfo signalSemaphoreInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = _renderFinishedSemaphores[imageIndex]};
+  VkSubmitInfo2 submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                           .waitSemaphoreInfoCount = 1,
+                           .pWaitSemaphoreInfos = &presentSemaphoreInfo,
+                           .commandBufferInfoCount = 1,
+                           .pCommandBufferInfos = &bufferInfo,
+                           .signalSemaphoreInfoCount = 1,
+                           .pSignalSemaphoreInfos = &signalSemaphoreInfo};
+
+  VK_CHECK(vkQueueSubmit2(_graphicsQueue, 1, &submitInfo,
+                          _inFlightFences[frame_index]));
+
+  VkPresentInfoKHR presentInfo{.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+                               .waitSemaphoreCount = 1,
+                               .pWaitSemaphores =
+                                   &_renderFinishedSemaphores[imageIndex],
+                               .swapchainCount = 1,
+                               .pSwapchains = &_swapchain,
+                               .pImageIndices = &imageIndex};
+
+  VK_CHECK(vkQueuePresentKHR(_graphicsQueue, &presentInfo));
+
+  frame_index = (frame_index + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
 void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
@@ -253,6 +288,7 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
   VkPhysicalDeviceVulkan13Features features13{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
       .pNext = &dynamicFeatures,
+      .synchronization2 = VK_TRUE,
       .dynamicRendering = VK_TRUE};
   VkPhysicalDeviceFeatures2 deviceFeatures{
       .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -352,11 +388,16 @@ void VulkanEngine::init_swapchain() {
       .oldSwapchain = nullptr};
 
   VK_CHECK(vkCreateSwapchainKHR(_device, &swapchainInfo, nullptr, &_swapchain));
-  VK_CHECK(vkGetSwapchainImagesKHR(_device, _swapchain, &_swapchainImageCount,
+
+  uint32_t actualImgCount = 0;
+  VK_CHECK(
+      vkGetSwapchainImagesKHR(_device, _swapchain, &actualImgCount, nullptr));
+  _swapchainImages.resize(actualImgCount);
+  VK_CHECK(vkGetSwapchainImagesKHR(_device, _swapchain, &actualImgCount,
                                    _swapchainImages.data()));
 
-  // Image Views
-  assert(_swapchainImages.empty());
+  assert(!_swapchainImages.empty());
+
   VkImageViewCreateInfo viewInfo = {
       .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
       .viewType = VK_IMAGE_VIEW_TYPE_2D,
@@ -384,19 +425,23 @@ void VulkanEngine::init_commands() {
   VK_CHECK(vkCreateCommandPool(_device, &poolInfo, nullptr, &_commandPool));
 
   // Command Buffer
+
+  _commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
   VkCommandBufferAllocateInfo bufferInfo = {
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
       .commandPool = _commandPool,
       .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      .commandBufferCount = 1};
-  VK_CHECK(vkAllocateCommandBuffers(_device, &bufferInfo, &_commandBuffer));
+      .commandBufferCount = MAX_FRAMES_IN_FLIGHT};
+  VK_CHECK(
+      vkAllocateCommandBuffers(_device, &bufferInfo, _commandBuffers.data()));
 }
 
 void VulkanEngine::record_buffer(uint32_t image_index) {
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 
-  VK_CHECK(vkBeginCommandBuffer(_commandBuffer, &beginInfo));
+  VK_CHECK(vkBeginCommandBuffer(_commandBuffers[frame_index], &beginInfo));
 
   transition_image_layout(image_index, VK_IMAGE_LAYOUT_UNDEFINED,
                           VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
@@ -421,7 +466,9 @@ void VulkanEngine::record_buffer(uint32_t image_index) {
       .colorAttachmentCount = 1,
       .pColorAttachments = &attachmentInfo};
 
-  vkCmdBeginRendering(_commandBuffer, &renderInfo);
+  vkCmdBeginRendering(_commandBuffers[frame_index], &renderInfo);
+
+  vkCmdEndRendering(_commandBuffers[frame_index]);
 
   transition_image_layout(image_index, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
                           VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
@@ -429,7 +476,7 @@ void VulkanEngine::record_buffer(uint32_t image_index) {
                           VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
                           VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
-  VK_CHECK(vkEndCommandBuffer(_commandBuffer));
+  VK_CHECK(vkEndCommandBuffer(_commandBuffers[frame_index]));
 }
 
 void VulkanEngine::transition_image_layout(
@@ -458,22 +505,33 @@ void VulkanEngine::transition_image_layout(
                                   .dependencyFlags = {},
                                   .imageMemoryBarrierCount = 1,
                                   .pImageMemoryBarriers = &barrier};
-  vkCmdPipelineBarrier2(_commandBuffer, &dependencyInfo);
+  vkCmdPipelineBarrier2(_commandBuffers[frame_index], &dependencyInfo);
 }
 
 void VulkanEngine::create_sync_objects() {
 
-  VkSemaphoreCreateInfo presentSemaphoreInfo{
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-  VK_CHECK(vkCreateSemaphore(_device, &presentSemaphoreInfo, nullptr,
-                             &_presentCompleteSemaphore));
+  _presentCompleteSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+  _renderFinishedSemaphores.resize(_swapchainImages.size());
+  _inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
-  VkSemaphoreCreateInfo renderFinishedSemaphoreInfo{
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
-  VK_CHECK(vkCreateSemaphore(_device, &renderFinishedSemaphoreInfo, nullptr,
-                             &_renderFinishedSemaphore));
+  assert(!_presentCompleteSemaphores.empty() &&
+         !_renderFinishedSemaphores.empty() && !_inFlightFences.empty());
 
   VkFenceCreateInfo drawInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO,
                              .flags = VK_FENCE_CREATE_SIGNALED_BIT};
-  VK_CHECK(vkCreateFence(_device, &drawInfo, nullptr, &_drawFence));
+  VkSemaphoreCreateInfo presentSemaphoreInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+  for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+    VK_CHECK(vkCreateSemaphore(_device, &presentSemaphoreInfo, nullptr,
+                               &_presentCompleteSemaphores[i]));
+
+    VK_CHECK(vkCreateFence(_device, &drawInfo, nullptr, &_inFlightFences[i]));
+  }
+
+  VkSemaphoreCreateInfo renderFinishedSemaphoreInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+  for (size_t i = 0; i < _swapchainImages.size(); i++) {
+    VK_CHECK(vkCreateSemaphore(_device, &renderFinishedSemaphoreInfo, nullptr,
+                               &_renderFinishedSemaphores[i]));
+  }
 }

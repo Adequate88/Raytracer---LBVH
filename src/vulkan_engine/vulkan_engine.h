@@ -9,6 +9,8 @@
 
 #include "vulkan_types.h"
 
+constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
 class VulkanEngine {
 public:
   static VulkanEngine &Get();
@@ -40,7 +42,7 @@ public:
 
   // Commands
   VkCommandPool _commandPool;
-  VkCommandBuffer _commandBuffer;
+  std::vector<VkCommandBuffer> _commandBuffers;
 
   // Window
   VkExtent2D _windowExtent{1600, 1080};
@@ -49,12 +51,14 @@ public:
   // Placeholder Image TODO :: REMOVE ONCE RAYTRACER IS BUILT IN
 
   // Sync Objects
-  VkSemaphore _presentCompleteSemaphore = nullptr;
-  VkSemaphore _renderFinishedSemaphore = nullptr;
-  VkFence _drawFence = nullptr;
+  std::vector<VkSemaphore> _presentCompleteSemaphores;
+  std::vector<VkSemaphore> _renderFinishedSemaphores;
+  std::vector<VkFence> _inFlightFences;
 
   VkImage placeholderImage;
   void write_image();
+
+  uint32_t frame_index = 0;
 
 private:
   void init_vulkan(); // Init basics
