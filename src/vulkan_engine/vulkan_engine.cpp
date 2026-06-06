@@ -5,6 +5,7 @@
 #include <complex>
 #include <cstddef>
 #include <cstdint>
+#include <fmt/base.h>
 #include <map>
 
 #include <SDL3/SDL.h>
@@ -377,9 +378,10 @@ void VulkanEngine::init_swapchain() {
       .imageExtent = _swapchainExtent,
       .imageArrayLayers = 1,
       .imageUsage =
-          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, // NOTE : Maybe change this to
-                                               // destination bit since we will
-                                               // render with CPU first?
+          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+          VK_IMAGE_USAGE_TRANSFER_DST_BIT, // NOTE : Maybe change this to
+                                           // destination bit since we will
+                                           // render with CPU first?
       .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .preTransform = surfaceCapabilities.currentTransform,
       .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
@@ -534,4 +536,49 @@ void VulkanEngine::create_sync_objects() {
     VK_CHECK(vkCreateSemaphore(_device, &renderFinishedSemaphoreInfo, nullptr,
                                &_renderFinishedSemaphores[i]));
   }
+}
+
+void VulkanEngine::allocate_buffer(VkBuffer &buffer,
+                                   VkDeviceMemory &deviceMemory,
+                                   VkDeviceSize size,
+                                   VkBufferUsageFlags usage_flags,
+                                   VkMemoryPropertyFlags properties) {
+  VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                .size = size,
+                                .usage = usage_flags,
+                                .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+  VK_CHECK(vkCreateBuffer(_device, &bufferInfo, nullptr, &buffer));
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(_device, buffer, &memRequirements);
+
+  // Get memory type index
+  uint32_t mem_index =
+      find_memory_type(memRequirements.memoryTypeBits, properties);
+
+  VkMemoryAllocateInfo allocInfo{.sType =
+                                     VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                 .allocationSize = memRequirements.size,
+                                 .memoryTypeIndex = mem_index};
+
+  VK_CHECK(vkAllocateMemory(_device, &allocInfo, nullptr, &deviceMemory));
+  VK_CHECK(vkBindBufferMemory(_device, buffer, deviceMemory, 0));
+}
+
+uint32_t VulkanEngine::find_memory_type(uint32_t type,
+                                        VkMemoryPropertyFlags properties) {
+
+  // Get memory type index
+  VkPhysicalDeviceMemoryProperties deviceProperties;
+  vkGetPhysicalDeviceMemoryProperties(_gpu, &deviceProperties);
+  for (uint32_t mem_index = 0; mem_index < deviceProperties.memoryTypeCount;
+       mem_index++) {
+    if ((deviceProperties.memoryTypes[mem_index].propertyFlags & properties) ==
+            properties &&
+        (1u << mem_index) & type)
+      return mem_index;
+  }
+
+  fmt::println("No valid memory found");
+  return 0;
 }

@@ -52,4 +52,6 @@ private:
   point3 defocus_disk_sample() const;
 
   color ray_color(const ray &r, int depth, const LBVH &world) const;
+
+  void
 };

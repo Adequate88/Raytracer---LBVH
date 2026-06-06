@@ -55,7 +55,7 @@ public:
   std::vector<VkSemaphore> _renderFinishedSemaphores;
   std::vector<VkFence> _inFlightFences;
 
-  VkImage placeholderImage;
+  VkBuffer placeholderData;
   void write_image();
 
   uint32_t frame_index = 0;
@@ -77,4 +77,10 @@ private:
   void record_buffer(uint32_t image_index);
 
   void draw_frame();
+  void allocate_buffer(VkBuffer &buffer, VkDeviceMemory &deviceMemory,
+                       VkDeviceSize size, VkBufferUsageFlags usage_flags,
+                       VkMemoryPropertyFlags properties);
+
+  uint32_t find_memory_type(uint32_t typeFilter,
+                            VkMemoryPropertyFlags properties);
 };
