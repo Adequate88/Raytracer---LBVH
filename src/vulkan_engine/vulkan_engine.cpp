@@ -582,3 +582,5 @@ uint32_t VulkanEngine::find_memory_type(uint32_t type,
   fmt::println("No valid memory found");
   return 0;
 }
+
+void VulkanEngine::write_image(std::vector<int> image_data) {}

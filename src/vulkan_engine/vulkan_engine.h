@@ -56,7 +56,7 @@ public:
   std::vector<VkFence> _inFlightFences;
 
   VkBuffer placeholderData;
-  void write_image();
+  void write_image(std::vector<int> image_data);
 
   uint32_t frame_index = 0;
 

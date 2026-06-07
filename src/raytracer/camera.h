@@ -6,7 +6,7 @@
 
 struct image {
   int width, height;
-  int *data;
+  std::vector<uint8_t> data;
 };
 
 class camera {
@@ -52,6 +52,4 @@ private:
   point3 defocus_disk_sample() const;
 
   color ray_color(const ray &r, int depth, const LBVH &world) const;
-
-  void
 };

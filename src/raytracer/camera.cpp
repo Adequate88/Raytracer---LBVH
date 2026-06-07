@@ -26,7 +26,7 @@ void camera::initialize() {
 
   img.width = image_width;
   img.height = image_height;
-  img.data = (int *)malloc(sizeof(int) * img.width * img.height * 3);
+  img.data.reserve(img.width * img.height * 4);
 
   center = lookfrom;
 
