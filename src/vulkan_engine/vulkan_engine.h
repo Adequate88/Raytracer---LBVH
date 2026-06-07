@@ -40,6 +40,12 @@ public:
   std::vector<VkImage> _swapchainImages;
   std::vector<VkImageView> _swapchainImageViews;
 
+  VkBuffer _stagingBuffer;
+  VkDeviceMemory _stagingMemory;
+  VkExtent2D _renderImgExt;
+  VkImage _renderImage;
+  VkDeviceMemory _renderImageMemory;
+
   // Commands
   VkCommandPool _commandPool;
   std::vector<VkCommandBuffer> _commandBuffers;
@@ -56,7 +62,8 @@ public:
   std::vector<VkFence> _inFlightFences;
 
   VkBuffer placeholderData;
-  void write_image(std::vector<int> image_data);
+  void write_image(const std::vector<uint8_t> &image_data, uint32_t width,
+                   uint32_t height);
 
   uint32_t frame_index = 0;
 
@@ -68,7 +75,7 @@ private:
 
   void create_sync_objects();
 
-  void transition_image_layout(uint32_t image_index, VkImageLayout old_layout,
+  void transition_image_layout(VkImage image, VkImageLayout old_layout,
                                VkImageLayout new_layout,
                                VkAccessFlags2 src_access_flags,
                                VkAccessFlags2 dst_access_flags,

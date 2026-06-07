@@ -27,10 +27,10 @@ void VulkanEngine::run() {
 
   while (!bQuit) {
     while (SDL_PollEvent(&e) != 0) {
-      draw_frame();
       if (e.type == SDL_EVENT_QUIT)
         bQuit = true;
     }
+    draw_frame();
   }
   VK_CHECK(vkDeviceWaitIdle(_device));
 }
@@ -445,44 +445,56 @@ void VulkanEngine::record_buffer(uint32_t image_index) {
 
   VK_CHECK(vkBeginCommandBuffer(_commandBuffers[frame_index], &beginInfo));
 
-  transition_image_layout(image_index, VK_IMAGE_LAYOUT_UNDEFINED,
-                          VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, {},
-                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT);
+  transition_image_layout(
+      _renderImage, VK_IMAGE_LAYOUT_UNDEFINED,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
-  VkClearValue clearColor = {VkClearColorValue{0.0f, 0.0f, 0.0f, 1.0f}};
+  VkBufferImageCopy region{
+      .bufferOffset = 0,
+      .bufferRowLength = 0,
+      .bufferImageHeight = 0,
+      .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+      .imageOffset = {0, 0, 0},
+      .imageExtent = {_renderImgExt.width, _renderImgExt.height, 1}};
+  vkCmdCopyBufferToImage(_commandBuffers[frame_index], _stagingBuffer,
+                         _renderImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1,
+                         &region);
 
-  VkRenderingAttachmentInfo attachmentInfo = {
-      .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-      .imageView = _swapchainImageViews[image_index],
-      .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-      .clearValue = clearColor};
+  transition_image_layout(
+      _renderImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
-  VkRenderingInfo renderInfo = {
-      .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
-      .renderArea = {.offset = {0, 0}, .extent = _swapchainExtent},
-      .layerCount = 1,
-      .colorAttachmentCount = 1,
-      .pColorAttachments = &attachmentInfo};
+  transition_image_layout(
+      _swapchainImages[image_index], VK_IMAGE_LAYOUT_UNDEFINED,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
-  vkCmdBeginRendering(_commandBuffers[frame_index], &renderInfo);
+  VkImageBlit blitRegion{.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                         .srcOffsets = {{0, 0, 0},
+                                        {(int32_t)_renderImgExt.width,
+                                         (int32_t)_renderImgExt.height, 1}},
+                         .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                         .dstOffsets = {{0, 0, 0},
+                                        {(int32_t)_swapchainExtent.width,
+                                         (int32_t)_swapchainExtent.height, 1}}};
+  vkCmdBlitImage(
+      _commandBuffers[frame_index], _renderImage,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, _swapchainImages[image_index],
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
 
-  vkCmdEndRendering(_commandBuffers[frame_index]);
-
-  transition_image_layout(image_index, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-                          VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                          VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT, {},
-                          VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-                          VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+  transition_image_layout(
+      _swapchainImages[image_index], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+      VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, VK_ACCESS_2_TRANSFER_WRITE_BIT, {},
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
   VK_CHECK(vkEndCommandBuffer(_commandBuffers[frame_index]));
 }
 
 void VulkanEngine::transition_image_layout(
-    uint32_t image_index, VkImageLayout old_layout, VkImageLayout new_layout,
+    VkImage image, VkImageLayout old_layout, VkImageLayout new_layout,
     VkAccessFlags2 src_access_flags, VkAccessFlags2 dst_access_flags,
     VkPipelineStageFlags2 src_stage_flags,
     VkPipelineStageFlags2 dst_stage_flags) {
@@ -497,7 +509,7 @@ void VulkanEngine::transition_image_layout(
       .newLayout = new_layout,
       .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
       .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-      .image = _swapchainImages[image_index],
+      .image = image,
       .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
                            .baseMipLevel = 0,
                            .levelCount = 1,
@@ -583,4 +595,49 @@ uint32_t VulkanEngine::find_memory_type(uint32_t type,
   return 0;
 }
 
-void VulkanEngine::write_image(std::vector<int> image_data) {}
+void VulkanEngine::write_image(const std::vector<uint8_t> &image_data,
+                               uint32_t width, uint32_t height) {
+  VkDeviceSize imageSize = image_data.size();
+
+  allocate_buffer(_stagingBuffer, _stagingMemory, imageSize,
+                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                  VK_MEMORY_PROPERTY_HOST_COHERENT_BIT |
+                      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+  void *mapped;
+  vkMapMemory(_device, _stagingMemory, 0, imageSize, {}, &mapped);
+
+  memcpy(mapped, image_data.data(), imageSize);
+
+  vkUnmapMemory(_device, _stagingMemory);
+
+  _renderImgExt = {width, height};
+
+  VkImageCreateInfo imgInfo{.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                            .imageType = VK_IMAGE_TYPE_2D,
+                            .format = VK_FORMAT_B8G8R8A8_SRGB,
+                            .extent = {width, height, 1},
+                            .mipLevels = 1,
+                            .arrayLayers = 1,
+                            .samples = VK_SAMPLE_COUNT_1_BIT,
+                            .tiling = VK_IMAGE_TILING_OPTIMAL,
+                            .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                            .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+
+  VK_CHECK(vkCreateImage(_device, &imgInfo, nullptr, &_renderImage));
+
+  VkMemoryRequirements imgMemReq;
+  vkGetImageMemoryRequirements(_device, _renderImage, &imgMemReq);
+  uint32_t imgMemType = find_memory_type(imgMemReq.memoryTypeBits,
+                                         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  VkMemoryAllocateInfo allocInfo{.sType =
+                                     VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                 .allocationSize = imgMemReq.size,
+                                 .memoryTypeIndex = imgMemType};
+
+  VK_CHECK(vkAllocateMemory(_device, &allocInfo, nullptr, &_renderImageMemory));
+  VK_CHECK(vkBindImageMemory(_device, _renderImage, _renderImageMemory, 0));
+}

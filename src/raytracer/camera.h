@@ -12,8 +12,8 @@ struct image {
 class camera {
 public:
   double aspect_ratio = 1.0;
-  int image_width = 100;
-  int image_height = int(image_width / aspect_ratio);
+  int image_width = 1600;
+  int image_height = 1080;
 
   int samples_per_pixel = 10;
   int max_depth = 10;

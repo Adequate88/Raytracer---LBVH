@@ -24,9 +24,14 @@ void camera::render(LBVH &world) {
 
 void camera::initialize() {
 
+  image_height = int(image_width / aspect_ratio);
+  image_height = (image_height < 1) ? 1 : image_height;
+
   img.width = image_width;
   img.height = image_height;
   img.data.reserve(img.width * img.height * 4);
+
+  pixel_samples_scale = 1.0 / samples_per_pixel;
 
   center = lookfrom;
 

@@ -27,11 +27,14 @@ int main() {
   VulkanEngine engine;
   engine.init();
 
-  engine.run();
-
   auto config = load_bunny(IMAGE_WIDTH, SAMPLES);
-  // auto config = cornell_box();
-  // run_experiment(config, "BASELINE");
+  LBVH bvh_tree(config.world.objects);
+  config.cam.render(bvh_tree);
+
+  engine.write_image(config.cam.img.data, config.cam.img.width,
+                     config.cam.img.height);
+
+  engine.run();
 
   return 0;
 }
