@@ -8,7 +8,7 @@
 #define METRIC_READ(name) Metrics::get().read(name)
 #define METRIC_START_TIME(name) Metrics::get().start_time(name)
 #define METRIC_END_TIME(name) Metrics::get().end_time(name)
-//#define METRIC_EXPORT(filename) Metrics::get().export(filename)
+#define METRIC_EXPORT(filename) Metrics::get().export_to(filename)
 
 #else
 
@@ -20,5 +20,3 @@
 #define METRIC_EXPORT(filename) ((void)0)
 
 #endif
-
-

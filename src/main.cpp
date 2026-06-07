@@ -36,5 +36,7 @@ int main() {
 
   engine.run();
 
+  METRIC_EXPORT("test.csv");
+
   return 0;
 }

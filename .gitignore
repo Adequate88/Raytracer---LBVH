@@ -5,6 +5,14 @@ models/*
 # Ignore build directory
 build/
 
+# Ignore profiler output (rocprof / perf)
+prof_out/
+results.json
+results.sysinfo.txt
+*.pftrace
+perf.data
+perf.data.old
+
 *.ppm
 
 CMakeCache.txt
