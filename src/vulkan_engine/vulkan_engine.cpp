@@ -1,5 +1,4 @@
 #include "vulkan_engine.h"
-#include "SDL3/SDL_opengl.h"
 #include "vulkan_types.h"
 #include <algorithm>
 #include <complex>
@@ -20,20 +19,6 @@ std::vector<char const *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 //
 VulkanEngine *loadedEngine = nullptr;
 VulkanEngine &VulkanEngine::Get() { return *loadedEngine; }
-
-void VulkanEngine::run() {
-  bool bQuit = false;
-  SDL_Event e;
-
-  while (!bQuit) {
-    while (SDL_PollEvent(&e) != 0) {
-      if (e.type == SDL_EVENT_QUIT)
-        bQuit = true;
-    }
-    draw_frame();
-  }
-  VK_CHECK(vkDeviceWaitIdle(_device));
-}
 
 void VulkanEngine::init() {
   assert(loadedEngine == nullptr);
@@ -62,7 +47,7 @@ void VulkanEngine::init() {
 
 void VulkanEngine::cleanup() {}
 
-void VulkanEngine::draw_frame() {
+uint32_t VulkanEngine::begin_frame() {
   VK_CHECK(vkWaitForFences(_device, 1, &_inFlightFences[frame_index], VK_TRUE,
                            UINT64_MAX));
   VK_CHECK(vkResetFences(_device, 1, &_inFlightFences[frame_index]));
@@ -73,8 +58,10 @@ void VulkanEngine::draw_frame() {
                                  VK_NULL_HANDLE, &imageIndex));
 
   vkResetCommandBuffer(_commandBuffers[frame_index], {});
-  record_buffer(imageIndex);
+  return imageIndex;
+}
 
+void VulkanEngine::end_frame(uint32_t imageIndex) {
   VkCommandBufferSubmitInfo bufferInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
       .commandBuffer = _commandBuffers[frame_index],
@@ -82,7 +69,7 @@ void VulkanEngine::draw_frame() {
   VkSemaphoreSubmitInfo presentSemaphoreInfo{
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
       .semaphore = _presentCompleteSemaphores[frame_index],
-      .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT};
+      .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT};
   VkSemaphoreSubmitInfo signalSemaphoreInfo{
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
       .semaphore = _renderFinishedSemaphores[imageIndex]};
@@ -439,7 +426,7 @@ void VulkanEngine::init_commands() {
       vkAllocateCommandBuffers(_device, &bufferInfo, _commandBuffers.data()));
 }
 
-void VulkanEngine::record_buffer(uint32_t image_index) {
+void VulkanEngine::record_buffer(uint32_t image_index) { // record buffer for
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 

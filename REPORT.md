@@ -59,7 +59,12 @@ On:
 
 
 
+## Current Todos
 
+- [ ] Implement Vulkan Back-end for ray tracing kernels
+  - [ ] Create compute pipeline
+  - [ ] Pass BVH structure into local device memory
+- [ ] Implement ray tracer kernel
 
 
 

@@ -17,7 +17,8 @@ public:
 
   void init(); // Initalize everything in the engine
 
-  void run();
+  uint32_t begin_frame();
+  void end_frame(uint32_t imageIndex);
 
   void cleanup();
 
@@ -65,6 +66,13 @@ public:
   void write_image(const std::vector<uint8_t> &image_data, uint32_t width,
                    uint32_t height);
 
+  void transition_image_layout(VkImage image, VkImageLayout old_layout,
+                               VkImageLayout new_layout,
+                               VkAccessFlags2 src_access_flags,
+                               VkAccessFlags2 dst_access_flags,
+                               VkPipelineStageFlags2 src_stage_flags,
+                               VkPipelineStageFlags2 dst_stage_flags);
+
   uint32_t frame_index = 0;
 
 private:
@@ -75,15 +83,8 @@ private:
 
   void create_sync_objects();
 
-  void transition_image_layout(VkImage image, VkImageLayout old_layout,
-                               VkImageLayout new_layout,
-                               VkAccessFlags2 src_access_flags,
-                               VkAccessFlags2 dst_access_flags,
-                               VkPipelineStageFlags2 src_stage_flags,
-                               VkPipelineStageFlags2 dst_stage_flags);
   void record_buffer(uint32_t image_index);
 
-  void draw_frame();
   void allocate_buffer(VkBuffer &buffer, VkDeviceMemory &deviceMemory,
                        VkDeviceSize size, VkBufferUsageFlags usage_flags,
                        VkMemoryPropertyFlags properties);
