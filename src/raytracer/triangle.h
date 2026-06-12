@@ -23,6 +23,8 @@ struct triangle_new {
   int _pad;
 }; // Total byes = 128 Bytes
 
+static_assert(sizeof(triangle_new) == 128);
+
 class triangle : public hittable {
 public:
   triangle(const point3 &v0, const point3 &v1, const point3 &v2, const vec3 &n0,

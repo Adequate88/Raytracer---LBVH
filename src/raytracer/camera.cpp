@@ -1,9 +1,8 @@
 #include "camera.h"
 #include "metrics_macros.h"
+#include "vec3.h"
 
 void camera::render(LBVH &world) {
-  initialize();
-
   METRIC_START_TIME("HOST_RENDER");
   for (int j = 0; j < image_height; j++) {
     for (int i = 0; i < image_width; i++) {
@@ -21,8 +20,7 @@ void camera::render(LBVH &world) {
 
 void camera::initialize() {
 
-  image_height = int(image_width / aspect_ratio);
-  image_height = (image_height < 1) ? 1 : image_height;
+  aspect_ratio = double(image_width) / image_height;
 
   img.width = image_width;
   img.height = image_height;
@@ -55,6 +53,12 @@ void camera::initialize() {
       focus_dist * std::tan(degrees_to_radians(defocus_angle / 2));
   defocus_disk_u = u * defocus_radius;
   defocus_disk_v = v * defocus_radius;
+
+  gpu_constants = {};
+  vec3_to_float4(center, gpu_constants.center);
+  vec3_to_float4(pixel00_loc, gpu_constants.pixel00_loc);
+  vec3_to_float4(pixel_delta_u, gpu_constants.pixel_delta_u);
+  vec3_to_float4(pixel_delta_v, gpu_constants.pixel_delta_v);
 }
 
 ray camera::get_ray(int i, int j) const {

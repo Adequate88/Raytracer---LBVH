@@ -7,6 +7,9 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_raii.hpp>
 
+constexpr uint32_t IMAGE_WIDTH = 600;
+constexpr uint32_t IMAGE_HEIGHT = 600;
+
 #include "vulkan_types.h"
 
 constexpr int MAX_FRAMES_IN_FLIGHT = 2;
@@ -52,7 +55,7 @@ public:
   std::vector<VkCommandBuffer> _commandBuffers;
 
   // Window
-  VkExtent2D _windowExtent{1600, 1080};
+  VkExtent2D _windowExtent{IMAGE_WIDTH, IMAGE_HEIGHT};
   struct SDL_Window *_window{nullptr};
 
   // Placeholder Image TODO :: REMOVE ONCE RAYTRACER IS BUILT IN

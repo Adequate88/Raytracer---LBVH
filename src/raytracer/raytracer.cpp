@@ -56,7 +56,9 @@ inline VkShaderModule load_shader(const std::string &path, VkDevice &device) {
 
 Raytracer::Raytracer(VulkanEngine &engine) : _engine(engine) {}
 
-void Raytracer::initRaytracer(const void *data, size_t size) {
+void Raytracer::initRaytracer(const void *data, size_t size,
+                              const void *cameraData) {
+  _cameraConstants = cameraData;
 
   createRenderTarget();
   createSceneBuffer(data, size);
@@ -216,10 +218,17 @@ void Raytracer::createDescriptors() {
 
 void Raytracer::createPipeline() {
 
+  VkPushConstantRange pushConstantRange{
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+      .offset = 0,
+      .size = 64}; // Currently hard-coded 64 Bytes
+
   VkPipelineLayoutCreateInfo layoutInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = 1,
-      .pSetLayouts = &_setLayout};
+      .pSetLayouts = &_setLayout,
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &pushConstantRange};
 
   VK_CHECK(
       vkCreatePipelineLayout(_engine._device, &layoutInfo, nullptr, &_layout));
@@ -251,6 +260,10 @@ void Raytracer::recordBuffer(
 
   VK_CHECK(vkBeginCommandBuffer(_engine._commandBuffers[_engine.frame_index],
                                 &beginInfo));
+
+  vkCmdPushConstants(_engine._commandBuffers[_engine.frame_index], _layout,
+                     VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
+                     _cameraConstants); // TODO ALSO HARDCODE 64 bytes here
 
   _engine.transition_image_layout(
       _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, {},

@@ -8,7 +8,6 @@
 #include "types.h"
 #include <fmt/base.h>
 
-const int IMAGE_WIDTH = 360;
 const int SAMPLES = 20;
 const std::string MODELS_DIR = "models/";
 
@@ -17,18 +16,6 @@ struct scene_config {
   camera cam;
   std::string name;
 };
-
-inline void vec3_to_float4(vec3 vector, float *float4) {
-  float4[0] = vector[0];
-  float4[1] = vector[1];
-  float4[2] = vector[2];
-  float4[3] = 0;
-}
-
-inline void vec2_to_float2(vec2 vector, float *float2) {
-  float2[0] = vector[0];
-  float2[1] = vector[1];
-}
 
 inline std::vector<triangle_new> convert_for_gpu(const hittable_list &mesh) {
   std::vector<triangle_new> new_mesh;
@@ -60,7 +47,7 @@ inline std::vector<triangle_new> convert_for_gpu(const hittable_list &mesh) {
   return new_mesh;
 }
 
-scene_config load_bunny(int image_width, int samples) {
+scene_config load_bunny(int image_width, int image_height, int samples) {
   scene_config config;
   config.name = "bunny";
 
@@ -71,8 +58,8 @@ scene_config load_bunny(int image_width, int samples) {
   config.world = convert_for_gpu(*mesh_triangles);
 
   // Camera setup for bunny
-  config.cam.aspect_ratio = 16.0 / 9.0;
   config.cam.image_width = image_width;
+  config.cam.image_height = image_height;
   config.cam.samples_per_pixel = samples;
   config.cam.max_depth = 10;
   config.cam.background = color(0.7, 0.8, 1.00);

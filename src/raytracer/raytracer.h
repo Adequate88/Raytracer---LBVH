@@ -19,11 +19,12 @@ public:
   VkDeviceMemory _renderTargetMemory;
   VkDeviceMemory _sceneMemory;
 
-  void initRaytracer(const void *data, size_t size);
+  void initRaytracer(const void *data, size_t size, const void *cameraData);
   void recordBuffer(uint32_t image_index);
 
 private:
   VulkanEngine &_engine;
+  const void *_cameraConstants;
 
   VkImage _renderTarget;
   VkImageView _renderTargetView;

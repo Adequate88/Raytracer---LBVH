@@ -15,13 +15,18 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  auto config = load_bunny(IMAGE_WIDTH, SAMPLES);
+  auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   // LBVH bvh_tree(config.world.objects);
   //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
   //  engine.write_image(config.cam.img.data, config.cam.img.width,
   //  config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
+  //
+
+  config.cam.initialize();
+
   raytracer.initRaytracer(config.world.data(),
-                          config.world.size() * sizeof(triangle_new));
+                          config.world.size() * sizeof(triangle_new),
+                          &config.cam.gpu_constants);
 
   bool bQuit = false;
   SDL_Event e;
@@ -37,7 +42,7 @@ int main() {
   }
   VK_CHECK(vkDeviceWaitIdle(engine._device));
 
-  METRIC_EXPORT("test.csv");
+  // METRIC_EXPORT("data/test.csv");
 
   return 0;
 }

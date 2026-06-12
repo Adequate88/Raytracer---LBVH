@@ -9,6 +9,20 @@ struct image {
   std::vector<uint8_t> data;
 };
 
+struct camera_push_constants {
+  float center[4]; // 16 bytes
+  float pixel00_loc[4];
+  float pixel_delta_u[4];
+  float pixel_delta_v[4]; // 16 * 4 = 64 bytes, perfect for push constant
+
+  // depth can be hardcoded for now
+  // defocus is an additional item we can add later
+};
+
+static_assert(sizeof(camera_push_constants) ==
+              64); // Currently hardcoded in pipeline to 64, so make sure to fix
+                   // if struct is changed
+
 class camera {
 public:
   double aspect_ratio = 1.0;
@@ -29,6 +43,9 @@ public:
   double defocus_angle = 0;
   double focus_dist = 10;
 
+  camera_push_constants gpu_constants;
+
+  void initialize();
   void render(LBVH &world);
 
 private:
@@ -40,8 +57,6 @@ private:
   vec3 u, v, w;
   vec3 defocus_disk_u;
   vec3 defocus_disk_v;
-
-  void initialize();
 
   ray get_ray(int i, int j) const;
 
