@@ -24,6 +24,8 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 
+# Ignore Visual Studio files
+.vs/*
 
 
 

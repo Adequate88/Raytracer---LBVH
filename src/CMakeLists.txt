@@ -20,4 +20,5 @@ target_link_libraries(engine PRIVATE bvh)
 target_link_libraries(engine PRIVATE vulkan_engine)
 target_link_libraries(engine PUBLIC fmt)
 
-
+# Resolves linking issue on windows
+target_link_libraries(vulkan_engine PUBLIC fmt)

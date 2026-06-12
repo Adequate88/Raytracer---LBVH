@@ -1,6 +1,15 @@
 #include "lbvh_cpu.h"
 #include "metrics_macros.h"
 
+// MSVC version of __builtin_clz
+#ifdef _MSC_VER
+#include <intrin.h>
+static inline int __builtin_clz(unsigned int x) {
+    unsigned long index;
+    _BitScanReverse(&index, x);
+    return 31 - (int)index;
+}
+#endif
 
 LBVHCpu::LBVHCpu(std::vector<shared_ptr<hittable>>& objects) : objects(objects), N(objects.size()) 
 {
