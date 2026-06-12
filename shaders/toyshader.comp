@@ -1,5 +1,70 @@
 #version 460
+
+struct triangle {
+  vec4 v0; vec4 v1; vec4 v2;
+  vec4 n0; vec4 n1; vec4 n2;
+  vec2 uv0; vec2 uv1; vec2 uv2;
+
+  int mat_index;
+  int _pad;
+};
+
+struct hit_record {
+    vec3 p;
+    vec3 normal;
+    // TODO: Material
+    float t; 
+    vec2 uv;
+    bool front_face;
+};
+
+const float EPSILON = 1e-8;
+
+bool intersect_triangle(
+  vec3 ray_origin, vec3 ray_dir, float t_closest, 
+  triangle tri, out hit_record rec) 
+{
+  vec3 edge1 = tri.v1.xyz - tri.v0.xyz;
+  vec3 edge2 = tri.v2.xyz - tri.v0.xyz;
+  vec3 h = cross(ray_dir, edge2);
+  float a = dot(edge1, h);
+
+  if(abs(a) < EPSILON) return false;
+
+  float f = 1.0 / a;
+  vec3 s = ray_origin - tri.v0.xyz;
+  float u = f * dot(s, h);
+
+  if (u < 0.0 || u > 1.0) return false;
+
+  vec3 q = cross(s, edge1);
+  float v = f * dot(ray_dir, q);
+
+  if (v < 0.0 || u + v > 1.0) return false;
+
+  float t = f * dot(edge2, q);
+
+  if (t < EPSILON || t > t_closest) return false;
+
+  rec.t = t;
+  rec.p = ray_origin + t * ray_dir;
+
+  // TODO: rest of hit records
+
+  return true;
+}
+
 layout(local_size_x = 16, local_size_y = 16) in;
+layout(push_constant) uniform Camera {
+    vec4 center;
+    vec4 pixel00_loc;
+    vec4 pixel_delta_u;
+    vec4 pixel_delta_v;
+} cam;
+layout(binding = 1, std430) readonly buffer SceneBuffer {
+    triangle triangles[];
+} scene;
+
 layout(binding = 0, rgba8) uniform writeonly image2D img;
 
 void main() {
@@ -7,11 +72,28 @@ void main() {
   ivec2 imgSize = imageSize(img);
 
   if (thread.x < imgSize.x && thread.y < imgSize.y) {
-    vec4 color = vec4( 
-        vec2(thread)/vec2(imgSize),
-        0,
-        1);
+    // calculate pixel position in world
+    vec3 pixel_pos = 
+      cam.pixel00_loc.xyz + 
+      float(thread.x) * cam.pixel_delta_u.xyz + 
+      float(thread.y) * cam.pixel_delta_v.xyz;
 
+    vec3 ray_dir = normalize(pixel_pos - cam.center.xyz);
+
+    hit_record rec;
+    rec.t = 1e30;
+
+    for (int i = 0; i < scene.triangles.length(); i++) {
+      hit_record temp_rec;
+      if (intersect_triangle(cam.center.xyz, ray_dir, rec.t, scene.triangles[i], temp_rec)) {
+        rec = temp_rec;
+      }
+    }
+
+    vec4 color = rec.t < 1e30 ? vec4(1, 1, 1, 1) : vec4(0, 0, 0, 1);
     imageStore(img, thread, color);
+
+    //color = vec4(vec2(thread)/vec2(imgSize), 0, 1);
+    //imageStore(img, thread, color);
   }
 }

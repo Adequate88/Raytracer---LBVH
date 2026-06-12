@@ -15,7 +15,8 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   // LBVH bvh_tree(config.world.objects);
   //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
   //  engine.write_image(config.cam.img.data, config.cam.img.width,

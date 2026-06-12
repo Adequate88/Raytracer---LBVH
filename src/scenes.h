@@ -72,3 +72,29 @@ scene_config load_bunny(int image_width, int image_height, int samples) {
 
   return config;
 }
+
+scene_config load_teapot(int image_width, int image_height, int samples) {
+    scene_config config;
+    config.name = "teapot";
+
+    auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
+    auto mesh_triangles =
+        mesh::load_obj(MODELS_DIR + "teapot.obj", mat, true, 0.5);
+
+    config.world = convert_for_gpu(*mesh_triangles);
+
+    // Camera setup for bunny
+    config.cam.image_width = image_width;
+    config.cam.image_height = image_height;
+    config.cam.samples_per_pixel = samples;
+    config.cam.max_depth = 10;
+    config.cam.background = color(0.7, 0.8, 1.00);
+    config.cam.vfov = 30;
+    config.cam.lookfrom = point3(-2, 3, 6);
+    config.cam.lookat = point3(-0.3, 1.0, 0);
+    config.cam.vup = vec3(0, 1, 0);
+    config.cam.defocus_angle = 0;
+    config.cam.focus_dist = 3.0;
+
+    return config;
+}
