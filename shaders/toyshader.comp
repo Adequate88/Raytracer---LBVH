@@ -22,6 +22,12 @@ const float EPSILON = 1e-8;
 const float PI = 3.14159;
 const int MAX_BOUNCES = 10;
 
+// From: https://stackoverflow.com/questions/9912143/how-to-get-a-random-number-in-opencl
+//noise values in range if 0.0 to 1.0
+float noise3D(float x, float y, float z) {
+    return fract(sin(x*112.9898f + y*179.233f + z*237.212f) * 43758.5453f);
+}
+
 bool intersect_triangle(
   vec3 ray_origin, vec3 ray_dir, float t_closest, 
   triangle tri, out hit_record rec) 
@@ -124,7 +130,11 @@ void main() {
 
       // Continue bounces
       ray_origin = rec.p;
-      ray_dir = normalize(rec.normal + vec3(0.0, 1.0, 0.0)); // TODO: generate random direction
+      float r0 = noise3D(rec.normal.x, i, rec.p.z);
+      float r1 = noise3D(rec.p.x, rec.normal.y, i);
+      float r2 = noise3D(i, rec.p.y, rec.normal.z);
+      vec3 rand_unit_vec = normalize(vec3(r0, r1, r2) * 2.0 - 1.0);
+      ray_dir = normalize(rec.normal + vec3(0.0, 1.0, 0.0)); 
       throughput *= (max(dot(rec.normal, ray_dir), 0.0) / hemiPDF) * BRDF;
     }
 
