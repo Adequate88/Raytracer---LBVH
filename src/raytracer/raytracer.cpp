@@ -56,10 +56,10 @@ inline VkShaderModule load_shader(const std::string &path, VkDevice &device) {
 
 Raytracer::Raytracer(VulkanEngine &engine) : _engine(engine) {}
 
-void Raytracer::initRaytracer() {
+void Raytracer::initRaytracer(const void *data, size_t size) {
 
   createRenderTarget();
-  createBuffers();
+  createSceneBuffer(data, size);
   createDescriptors();
   createPipeline();
 }
@@ -106,30 +106,74 @@ void Raytracer::createRenderTarget() {
                              &_renderTargetView));
 }
 
-void Raytracer::createBuffers() {}
+void Raytracer::createSceneBuffer(const void *data, size_t size) {
+  VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                .size = size,
+                                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+
+  VK_CHECK(
+      vkCreateBuffer(_engine._device, &bufferInfo, nullptr, &_sceneBuffer));
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(_engine._device, _sceneBuffer,
+                                &memRequirements);
+
+  uint32_t mem_index =
+      find_memory_type(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       memRequirements.memoryTypeBits);
+
+  VkMemoryAllocateInfo allocInfo{.sType =
+                                     VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                 .allocationSize = memRequirements.size,
+                                 .memoryTypeIndex = mem_index};
+  VK_CHECK(
+      vkAllocateMemory(_engine._device, &allocInfo, nullptr, &_sceneMemory));
+  VK_CHECK(vkBindBufferMemory(_engine._device, _sceneBuffer, _sceneMemory, 0));
+
+  void *mapped;
+  VK_CHECK(vkMapMemory(_engine._device, _sceneMemory, 0, size, {}, &mapped));
+  memcpy(mapped, data, size);
+  vkUnmapMemory(_engine._device, _sceneMemory);
+}
 
 void Raytracer::createDescriptors() {
 
-  VkDescriptorSetLayoutBinding layoutBindings{
+  VkDescriptorSetLayoutBinding renderBinding{
       .binding = 0,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+
+  VkDescriptorSetLayoutBinding sceneBinding{
+      .binding = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+
+  VkDescriptorSetLayoutBinding layoutBindings[2] = {renderBinding,
+                                                    sceneBinding};
+
   VkDescriptorSetLayoutCreateInfo setInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 1,
-      .pBindings = &layoutBindings};
+      .bindingCount = 2,
+      .pBindings = layoutBindings};
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &setInfo, nullptr,
                                        &_setLayout));
 
   // Pool
-  VkDescriptorPoolSize poolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                .descriptorCount = 1};
+  VkDescriptorPoolSize renderPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                      .descriptorCount = 1};
+  VkDescriptorPoolSize scenePoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                     .descriptorCount = 1};
+
+  VkDescriptorPoolSize poolSizes[2] = {renderPoolSize, scenePoolSize};
   VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .maxSets = 1,
-      .poolSizeCount = 1,
-      .pPoolSizes = &poolSize};
+      .poolSizeCount = 2,
+      .pPoolSizes = poolSizes};
 
   VK_CHECK(vkCreateDescriptorPool(_engine._device, &poolInfo, nullptr,
                                   &_descriptorPool));
@@ -139,21 +183,35 @@ void Raytracer::createDescriptors() {
       .descriptorPool = _descriptorPool,
       .descriptorSetCount = 1,
       .pSetLayouts = &_setLayout};
+
   VK_CHECK(vkAllocateDescriptorSets(_engine._device, &descriptorAllocInfo,
                                     &_descriptorSet));
 
   VkDescriptorImageInfo descriptorImageInfo{
       .imageView = _renderTargetView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
-  VkWriteDescriptorSet writeSet{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-                                .dstSet = _descriptorSet,
-                                .dstBinding = 0,
-                                .dstArrayElement = 0,
-                                .descriptorCount = 1,
-                                .descriptorType =
-                                    VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                .pImageInfo = &descriptorImageInfo};
 
-  vkUpdateDescriptorSets(_engine._device, 1, &writeSet, 0, nullptr);
+  VkWriteDescriptorSet writeRender{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _descriptorSet,
+      .dstBinding = 0,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+      .pImageInfo = &descriptorImageInfo};
+
+  VkDescriptorBufferInfo descriptorBufferInfo{_sceneBuffer, 0, VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeScene{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _descriptorSet,
+      .dstBinding = 1,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorBufferInfo};
+
+  VkWriteDescriptorSet writeSets[2] = {writeRender, writeScene};
+  vkUpdateDescriptorSets(_engine._device, 2, writeSets, 0, nullptr);
 }
 
 void Raytracer::createPipeline() {

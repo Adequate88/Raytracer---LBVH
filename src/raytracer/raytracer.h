@@ -3,6 +3,7 @@
 #include "vulkan_engine.h"
 #include "vulkan_engine/vulkan_engine.h"
 #include <cstdint>
+#include <iterator>
 #include <vulkan/vulkan_core.h>
 
 class Raytracer {
@@ -16,8 +17,9 @@ public:
   VkPipeline _pipeline;
 
   VkDeviceMemory _renderTargetMemory;
+  VkDeviceMemory _sceneMemory;
 
-  void initRaytracer();
+  void initRaytracer(const void *data, size_t size);
   void recordBuffer(uint32_t image_index);
 
 private:
@@ -26,9 +28,11 @@ private:
   VkImage _renderTarget;
   VkImageView _renderTargetView;
 
+  VkBuffer _sceneBuffer;
+
   void createRenderTarget();
-  void createBuffers();
   void createDescriptors();
+  void createSceneBuffer(const void *data, size_t size);
   void createShaderModule();
   void createPipeline();
 };
