@@ -221,9 +221,9 @@ void LBVH::radix_sort() {
                           &buf_histogram);
     check_cl_error(err, "clSetKernelArg(create_histogram)");
     cl_event ev_h;
-    err = clEnqueueNDRangeKernel(queue, kernel_create_histogram, 1, nullptr,
-                                 &histo_global, &histo_local, 0, nullptr,
-                                 &ev_h);
+    err =
+        clEnqueueNDRangeKernel(queue, kernel_create_histogram, 1, nullptr,
+                               &histo_global, &histo_local, 0, nullptr, &ev_h);
     check_cl_error(err, "clEnqueueNDRangeKernel(create_histogram)");
     ev_histogram.push_back(ev_h);
 

@@ -1,21 +1,14 @@
 #version 460
 
-struct triangle {
-  vec4 v0; vec4 v1; vec4 v2;
-  vec4 n0; vec4 n1; vec4 n2;
-  vec2 uv0; vec2 uv1; vec2 uv2;
-
-  int mat_index;
-  int _pad;
-};
+#include "triangle.glsl"
 
 struct hit_record {
-    vec3 p;
-    vec3 normal;
-    int mat_index;
-    float t; 
-    vec2 uv;
-    bool front_face;
+  vec3 p;
+  vec3 normal;
+  int mat_index;
+  float t;
+  vec2 uv;
+  bool front_face;
 };
 
 const float EPSILON = 1e-8;
@@ -26,19 +19,19 @@ const int SAMPLES = 10;
 // From: https://stackoverflow.com/questions/9912143/how-to-get-a-random-number-in-opencl
 //noise values in range if 0.0 to 1.0
 float noise3D(float x, float y, float z) {
-    return fract(sin(x*112.9898f + y*179.233f + z*237.212f) * 43758.5453f);
+  return fract(sin(x * 112.9898f + y * 179.233f + z * 237.212f) * 43758.5453f);
 }
 
 bool intersect_triangle(
-  vec3 ray_origin, vec3 ray_dir, float t_closest, 
-  triangle tri, out hit_record rec) 
+  vec3 ray_origin, vec3 ray_dir, float t_closest,
+  triangle tri, out hit_record rec)
 {
   vec3 edge1 = tri.v1.xyz - tri.v0.xyz;
   vec3 edge2 = tri.v2.xyz - tri.v0.xyz;
   vec3 h = cross(ray_dir, edge2);
   float a = dot(edge1, h);
 
-  if(abs(a) < EPSILON) return false;
+  if (abs(a) < EPSILON) return false;
 
   float f = 1.0 / a;
   vec3 s = ray_origin - tri.v0.xyz;
@@ -60,10 +53,10 @@ bool intersect_triangle(
 
   float w = 1.0 - u - v;
   vec3 outward_normal = normalize(
-    w * tri.n0.xyz +
-    u * tri.n1.xyz +
-    v * tri.n2.xyz
-  );
+      w * tri.n0.xyz +
+        u * tri.n1.xyz +
+        v * tri.n2.xyz
+    );
 
   rec.front_face = dot(ray_dir, outward_normal) < 0;
   rec.normal = rec.front_face ? outward_normal : -outward_normal;
@@ -76,13 +69,13 @@ bool intersect_triangle(
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(push_constant) uniform Camera {
-    vec4 center;
-    vec4 pixel00_loc;
-    vec4 pixel_delta_u;
-    vec4 pixel_delta_v;
+  vec4 center;
+  vec4 pixel00_loc;
+  vec4 pixel_delta_u;
+  vec4 pixel_delta_v;
 } cam;
 layout(binding = 1, std430) readonly buffer SceneBuffer {
-    triangle triangles[];
+  triangle triangles[];
 } scene;
 
 layout(binding = 0, rgba8) uniform writeonly image2D img;
@@ -93,10 +86,10 @@ void main() {
 
   if (thread.x < imgSize.x && thread.y < imgSize.y) {
     // calculate pixel position in world
-    vec3 pixel_pos = 
-      cam.pixel00_loc.xyz + 
-      float(thread.x) * cam.pixel_delta_u.xyz + 
-      float(thread.y) * cam.pixel_delta_v.xyz;
+    vec3 pixel_pos =
+      cam.pixel00_loc.xyz +
+        float(thread.x) * cam.pixel_delta_u.xyz +
+        float(thread.y) * cam.pixel_delta_v.xyz;
 
     vec3 energy = vec3(0.0, 0.0, 0.0);
     vec3 BRDF = vec3(0.4, 0.6, 0.4) / PI;
@@ -140,7 +133,7 @@ void main() {
         float r1 = noise3D(seed, float(i) * 0.3183, rec.p.y);
         float r2 = noise3D(seed, float(i) * 0.7123, rec.p.z);
         vec3 rand_unit_vec = normalize(vec3(r0, r1, r2) * 2.0 - 1.0);
-        ray_dir = normalize(rec.normal + rand_unit_vec); 
+        ray_dir = normalize(rec.normal + rand_unit_vec);
         throughput *= (max(dot(rec.normal, ray_dir), 0.0) / hemiPDF) * BRDF;
       }
 
