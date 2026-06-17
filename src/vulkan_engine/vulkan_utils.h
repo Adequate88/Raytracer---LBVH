@@ -51,3 +51,29 @@ inline VkShaderModule load_shader(const std::string &path, VkDevice &device) {
 
   return module;
 }
+
+inline void createStorageBuffer(VkDevice &device, VkBuffer &buffer,
+                                size_t bufferSize,
+                                VkMemoryPropertyFlags memProperties,
+                                VkDeviceMemory &devMemory) {
+
+  VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                .size = bufferSize,
+                                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+  VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
+
+  uint32_t mem_index =
+      find_memory_type(memProperties, memRequirements.memoryTypeBits);
+
+  VkMemoryAllocateInfo allocInfo{.sType =
+                                     VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                 .allocationSize = memRequirements.size,
+                                 .memoryTypeIndex = mem_index};
+
+  VK_CHECK(vkAllocateMemory(device, &allocInfo, nullptr, &devMemory));
+  VK_CHECK(vkBindBufferMemory(device, buffer, devMemory, 0));
+}
