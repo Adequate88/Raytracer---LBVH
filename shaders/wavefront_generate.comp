@@ -1,6 +1,7 @@
 #version 460
 
 #include "ray.glsl"
+#include "path_state.glsl"
 
 const int SAMPLES = 10;
 
@@ -17,6 +18,9 @@ layout(binding = 0, rgba8) uniform writeonly image2D img;
 layout(binding = 1, std430) writeonly buffer RaysBuffer {
   Ray rays[];
 } ray_out;
+layout(binding = 2, std430) writeonly buffer PathStateBuffer {
+  PathState states[];
+} path_state_out;
 
 void main() {
   ivec2 thread = ivec2(gl_GlobalInvocationID.xy);
@@ -35,6 +39,11 @@ void main() {
       int sample_index = pixel_index * SAMPLES + s;
       ray_out.rays[sample_index].origin = cam.center.xyz;
       ray_out.rays[sample_index].dir = ray_dir;
+
+      path_state_out.states[sample_index].throughput = vec3(1.0, 1.0, 1.0);
+      path_state_out.states[sample_index].radiance = vec3(0.0, 0.0, 0.0);
+      path_state_out.states[sample_index].og_path_idx = uint(sample_index);
+      path_state_out.states[sample_index].bounce = 0;
     }
   }
 }

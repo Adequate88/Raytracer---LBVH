@@ -5,15 +5,15 @@
 
 layout(local_size_x = 256) in;
 
-layout(binding = 1, std430) readonly buffer RaysBuffer {
+layout(binding = 0, std430) readonly buffer RaysBuffer {
   Ray rays[];
 } ray_in;
 
-layout(binding = 2, std430) writeonly buffer HitRecordsBuffer {
+layout(binding = 1, std430) writeonly buffer HitRecordsBuffer {
   hit_record records[];
 } hit_records;
 
-layout(binding = 3, std430) readonly buffer SceneBuffer {
+layout(binding = 2, std430) readonly buffer SceneBuffer {
   triangle triangles[];
 } scene;
 
