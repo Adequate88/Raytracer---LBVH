@@ -14,7 +14,8 @@ struct node {
   int right;
   int parent;
   int primitive_id;
-  int atomic_counter;
+  int atomic_counter; // 52 bytes
+  int pad_to_64[3]; // Vec4 has alignment of 16 bytes, so node has alignment of 16 bytes, so to ensure correct reads we need sizeof(node) % 16 == 0.
 };
 
 layout(local_size_x = 256) in;
