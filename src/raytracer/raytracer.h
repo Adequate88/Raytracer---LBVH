@@ -22,6 +22,8 @@ public:
   void initRaytracer(const void *data, size_t size, const void *cameraData);
   void recordBuffer(uint32_t image_index);
 
+  VkBuffer &sceneBuffer() { return _sceneBuffer; }
+
 private:
   VulkanEngine &_engine;
   const void *_cameraConstants;

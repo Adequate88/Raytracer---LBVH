@@ -205,8 +205,7 @@ void Raytracer::createPipeline() {
   vkDestroyShaderModule(_engine._device, toyShader, nullptr);
 }
 
-void Raytracer::recordBuffer(
-    uint32_t image_index) { // record buffer for reading CPU image
+void Raytracer::recordBuffer(uint32_t image_index) {
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 

@@ -1,3 +1,4 @@
+#include "bvh.h"
 #include "lbvh_gpu.h"
 #include "metrics_macros.h"
 #include "raytracer.h"
@@ -28,6 +29,10 @@ int main() {
   raytracer.initRaytracer(config.world.data(),
                           config.world.size() * sizeof(triangle_new),
                           &config.cam.gpu_constants);
+
+  Bvh bvh(engine, config.world.size());
+  bvh.init(raytracer.sceneBuffer());
+  bvh.build();
 
   bool bQuit = false;
   SDL_Event e;
