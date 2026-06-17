@@ -1,0 +1,38 @@
+#version 460
+
+#include "triangle.glsl"
+#include "ray.glsl"
+
+layout(local_size_x = 256) in;
+
+layout(binding = 1, std430) readonly buffer RaysBuffer {
+  Ray rays[];
+} ray_in;
+
+layout(binding = 2, std430) writeonly buffer HitRecordsBuffer {
+  hit_record records[];
+} hit_records;
+
+layout(binding = 3, std430) readonly buffer SceneBuffer {
+  triangle triangles[];
+} scene;
+
+void main() {
+  int thread = int(gl_GlobalInvocationID.x);
+
+  if (thread < ray_in.rays.length()) {
+    Ray ray = ray_in.rays[thread];
+    hit_record rec;
+    rec.t = 1e30;
+
+    // TODO: replace w bvh traversal
+    for (int i = 0; i < scene.triangles.length(); i++) {
+      hit_record temp_rec;
+      if (intersect_triangle(ray.origin, ray.dir, rec.t, scene.triangles[i], temp_rec)) {
+        rec = temp_rec;
+      }
+    }
+
+    hit_records.records[thread] = rec;
+  }
+}
