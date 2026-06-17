@@ -15,9 +15,11 @@ layout(push_constant) uniform Camera {
 
 // TODO: pass image size with push constants
 layout(binding = 0, rgba8) uniform writeonly image2D img;
+
 layout(binding = 1, std430) writeonly buffer RaysBuffer {
   Ray rays[];
 } ray_out;
+
 layout(binding = 2, std430) writeonly buffer PathStateBuffer {
   PathState states[];
 } path_state_out;
