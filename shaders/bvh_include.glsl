@@ -26,7 +26,7 @@ layout(binding = 0, std430) readonly buffer SceneBuffer {
 
 layout(binding = 1, std430) coherent buffer BvhBuffer {
   node nodes[];
-} bvh;
+};
 
 bool aabb_hit(vec3 ray_origin, vec3 ray_dir, float t_curr_min,
   vec3 aabb_min, vec3 aabb_max) {

@@ -2,6 +2,7 @@
 
 #include "vulkan_engine.h"
 #include "vulkan_types.h"
+#include <cstddef>
 #include <vulkan/vulkan_core.h>
 
 #define DEVICE _engine._device
@@ -18,13 +19,18 @@ struct bufferMemory {
 
 class Bvh {
 public:
-  Bvh(VulkanEngine &engine);
+  Bvh(VulkanEngine &engine, size_t primitiveCount);
 
-  void init(size_t N, VkBuffer &primBuffer);
+  void init(VkBuffer &primBuffer);
   void build();
 
 private:
   VulkanEngine &_engine;
+
+  size_t _primitiveCount;
+  size_t groups;
+  size_t histogramElems;
+  size_t numBlocks;
 
   bufferMemory bvhBuffer;
   bufferMemory primBboxBuffer;
@@ -39,11 +45,11 @@ private:
 
   VkDescriptorSetLayout _bvhDescriptorLayout;
   VkDescriptorPool _bvhDescriptorPool;
-  VkDescriptorSet _bvhDescriptor;
+  VkDescriptorSet _bvhDescriptors[2]; // [0] = normal, [1] = ping-pong swapped
   VkPipelineLayout _bvhPipelineLayout;
   std::vector<VkPipeline> _bvhPipelines;
 
-  void createBvhBuffers(size_t N);
+  void createBvhBuffers();
   void createDescriptor(VkBuffer &primBuffer);
   void createPipelines();
 };

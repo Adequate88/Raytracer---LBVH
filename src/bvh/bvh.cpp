@@ -4,41 +4,139 @@
 #include <cstddef>
 #include <cstdint>
 #include <sys/types.h>
+#include <utility>
 #include <vulkan/vulkan_core.h>
 
-Bvh::Bvh(VulkanEngine &engine) : _engine(engine) {}
+Bvh::Bvh(VulkanEngine &engine, size_t primitiveCount)
+    : _engine(engine), _primitiveCount(primitiveCount) {}
 
-void Bvh::init(size_t primitiveCount, VkBuffer &primBuffer) {
-  createBvhBuffers(primitiveCount);
+void Bvh::init(VkBuffer &primBuffer) {
+  groups = (_primitiveCount + 1023) / 1024;
+  histogramElems = 16 * groups * 256;
+  numBlocks = histogramElems / 512;
+
+  createBvhBuffers();
   createDescriptor(primBuffer);
   createPipelines();
 }
 
-void Bvh::build() {}
+void Bvh::build() {
 
-void Bvh::createBvhBuffers(
-    size_t primitiveCount) { // XXX: Currently doing 1:1 buffer/deviceMemory.
-                             // Change later if needed
+  VkCommandPool buildPool;
+  VkCommandPoolCreateInfo poolInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
+      .queueFamilyIndex = _engine._queueFamilyIndex};
+  VK_CHECK(vkCreateCommandPool(DEVICE, &poolInfo, nullptr, &buildPool));
+
+  // Command Buffer
+  VkCommandBuffer buildCommandBuffer;
+  VkCommandBufferAllocateInfo bufferInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = buildPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = 1};
+  VK_CHECK(vkAllocateCommandBuffers(DEVICE, &bufferInfo, &buildCommandBuffer));
+
+  VkCommandBufferBeginInfo beginInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+
+  VK_CHECK(vkBeginCommandBuffer(buildCommandBuffer, &beginInfo));
+
+  struct PushConstants {
+    int32_t primitiveCount;
+    int32_t pass_idx;
+    int32_t num_blocks;
+    int32_t histogram_size;
+  } pc{(int32_t)_primitiveCount, -1, (int32_t)numBlocks,
+       (int32_t)histogramElems};
+
+  auto dispatch = [&](uint32_t pipelineIdx, VkDescriptorSet set,
+                      uint32_t groupCount) {
+    vkCmdBindPipeline(buildCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _bvhPipelines[pipelineIdx]);
+    vkCmdBindDescriptorSets(buildCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            _bvhPipelineLayout, 0, 1, &set, 0, nullptr);
+    vkCmdDispatch(buildCommandBuffer, groupCount, 1, 1);
+
+    VkMemoryBarrier2 barrier{
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+    VkDependencyInfo dep{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                         .memoryBarrierCount = 1,
+                         .pMemoryBarriers = &barrier};
+    vkCmdPipelineBarrier2(buildCommandBuffer, &dep);
+  };
+
+  uint32_t primGroups = (_primitiveCount + 255) / 256;
+  uint32_t internalGroups = (_primitiveCount - 1 + 255) / 256;
+
+  vkCmdPushConstants(buildCommandBuffer, _bvhPipelineLayout,
+                     VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+
+  dispatch(0, _bvhDescriptors[0], primGroups); // init_prim_bboxes
+  dispatch(1, _bvhDescriptors[0], 1);          // create_world_bbox
+  dispatch(2, _bvhDescriptors[0], primGroups); // compute_morton_codes
+
+  for (int pass = 0; pass < 8; pass++) {
+    pc.pass_idx = pass;
+    vkCmdPushConstants(buildCommandBuffer, _bvhPipelineLayout,
+                       VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
+    VkDescriptorSet set = _bvhDescriptors[pass % 2];
+    dispatch(3, set, (uint32_t)groups);    // create_histogram
+    dispatch(4, set, (uint32_t)numBlocks); // prefix_sum
+    dispatch(5, set, 1);                   // scan_global_sum
+    dispatch(6, set, (uint32_t)numBlocks); // add_global_sums
+    dispatch(7, set, (uint32_t)groups);    // scatter
+  }
+
+  dispatch(8, _bvhDescriptors[0], primGroups);     // init_prim_nodes
+  dispatch(9, _bvhDescriptors[0], internalGroups); // create_bvh_hierarchy
+  dispatch(10, _bvhDescriptors[0], primGroups);    // build_bboxes
+
+  VK_CHECK(vkEndCommandBuffer(buildCommandBuffer));
+
+  VkFenceCreateInfo fenceInfo{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+  VkFence fence;
+  VK_CHECK(vkCreateFence(DEVICE, &fenceInfo, nullptr, &fence));
+
+  VkSubmitInfo submit{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+                      .commandBufferCount = 1,
+                      .pCommandBuffers = &buildCommandBuffer};
+  VK_CHECK(vkQueueSubmit(_engine._graphicsQueue, 1, &submit, fence));
+  VK_CHECK(vkWaitForFences(DEVICE, 1, &fence, VK_TRUE, UINT64_MAX));
+
+  vkDestroyFence(DEVICE, fence, nullptr);
+  vkDestroyCommandPool(DEVICE, buildPool, nullptr);
+}
+
+void Bvh::createBvhBuffers() { // XXX: Currently doing 1:1 buffer/deviceMemory.
+                               // Change later if needed
 
   // BvhBuffer: 2N-1 nodes (N leaves + N-1 internal)
-  bvhBuffer.size = (2 * primitiveCount - 1) * NODE_STRUCT_BYTES;
+  bvhBuffer.size = (2 * _primitiveCount - 1) * NODE_STRUCT_BYTES;
   createStorageBuffer(DEVICE, bvhBuffer.buffer, bvhBuffer.size,
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bvhBuffer.memory);
 
   // primBboxBuffer: N aabbs (2 vec4 = 32 Bytes)
-  primBboxBuffer.size = primitiveCount * 32;
+  primBboxBuffer.size = _primitiveCount * 32;
   createStorageBuffer(DEVICE, primBboxBuffer.buffer, primBboxBuffer.size,
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                       primBboxBuffer.memory);
 
   // mortonCodesBuffer: N uints
-  mortonCodesBuffer.size = primitiveCount * 4;
+  mortonCodesBuffer.size = _primitiveCount * 4;
   createStorageBuffer(DEVICE, mortonCodesBuffer.buffer, mortonCodesBuffer.size,
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                       mortonCodesBuffer.memory);
 
   // primIndicesBuffer: N uints
-  primIndicesBuffer.size = primitiveCount * 4;
+  primIndicesBuffer.size = _primitiveCount * 4;
   createStorageBuffer(DEVICE, primIndicesBuffer.buffer, primIndicesBuffer.size,
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                       primIndicesBuffer.memory);
@@ -49,11 +147,6 @@ void Bvh::createBvhBuffers(
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                       worldBboxBuffer.memory);
 
-  size_t groups = (primitiveCount + 1023) /
-                  1024; // create_histogram groups (1024 elems/group)
-  size_t histogramElems = 16 * groups * 256; // 16 digits * groups * 256 threads
-  size_t numBlocks =
-      histogramElems / 512; // prefix_sum blocks (512 elems each) = 8*groups
   // histogramBuffer: 16 * groups * 256 uints
   histogramBuffer.size = histogramElems * 4;
   createStorageBuffer(DEVICE, histogramBuffer.buffer, histogramBuffer.size,
@@ -73,13 +166,13 @@ void Bvh::createBvhBuffers(
                       globSumBuffer.memory);
 
   // outputMortonCodeBuffer: N uints
-  outputMortonCodeBuffer.size = primitiveCount * 4;
+  outputMortonCodeBuffer.size = _primitiveCount * 4;
   createStorageBuffer(
       DEVICE, outputMortonCodeBuffer.buffer, outputMortonCodeBuffer.size,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, outputMortonCodeBuffer.memory);
 
   // outputPrimIndicesBuffer: N uints
-  outputPrimIndicesBuffer.size = primitiveCount * 4;
+  outputPrimIndicesBuffer.size = _primitiveCount * 4;
   createStorageBuffer(
       DEVICE, outputPrimIndicesBuffer.buffer, outputPrimIndicesBuffer.size,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, outputPrimIndicesBuffer.memory);
@@ -109,33 +202,32 @@ void Bvh::createDescriptor(VkBuffer &primBuffer) {
   std::vector<VkDescriptorPoolSize> poolSizes;
 
   for (uint32_t i = 0; i < bindingCount; i++) {
-    poolSizes.push_back(VkDescriptorPoolSize{
-        .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 1});
+    poolSizes.push_back(
+        VkDescriptorPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                             .descriptorCount = 2}); // 2 sets share the pool
   }
 
   VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-      .maxSets = 1,
+      .maxSets = 2,
       .poolSizeCount = bindingCount,
       .pPoolSizes = poolSizes.data()};
   VK_CHECK(
       vkCreateDescriptorPool(DEVICE, &poolInfo, nullptr, &_bvhDescriptorPool));
 
+  VkDescriptorSetLayout layouts[2] = {_bvhDescriptorLayout,
+                                      _bvhDescriptorLayout};
   VkDescriptorSetAllocateInfo allocInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
       .descriptorPool = _bvhDescriptorPool,
-      .descriptorSetCount = 1,
-      .pSetLayouts = &_bvhDescriptorLayout};
+      .descriptorSetCount = 2,
+      .pSetLayouts = layouts};
 
-  VK_CHECK(vkAllocateDescriptorSets(DEVICE, &allocInfo, &_bvhDescriptor));
+  VK_CHECK(vkAllocateDescriptorSets(DEVICE, &allocInfo, _bvhDescriptors));
 
-  std::vector<VkDescriptorBufferInfo> bufferInfos;
-  std::vector<VkWriteDescriptorSet> writeSets;
-
-  for (uint32_t i = 0; i < bindingCount; i++) {
-    bufferInfos.push_back(
-        VkDescriptorBufferInfo{.offset = 0, .range = VK_WHOLE_SIZE});
-  }
+  std::vector<VkDescriptorBufferInfo> bufferInfos(
+      bindingCount,
+      VkDescriptorBufferInfo{.offset = 0, .range = VK_WHOLE_SIZE});
 
   bufferInfos[0].buffer = primBuffer;
   bufferInfos[1].buffer = bvhBuffer.buffer;
@@ -149,27 +241,40 @@ void Bvh::createDescriptor(VkBuffer &primBuffer) {
   bufferInfos[9].buffer = outputMortonCodeBuffer.buffer;
   bufferInfos[10].buffer = outputPrimIndicesBuffer.buffer;
 
-  for (uint32_t i = 0; i < bindingCount; i++) {
-    writeSets.push_back(VkWriteDescriptorSet{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = _bvhDescriptor,
-        .dstBinding = i,
-        .dstArrayElement = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .pBufferInfo = &bufferInfos[i]});
-  }
+  for (uint32_t set = 0; set < 2; set++) {
+    if (set == 1) {
+      std::swap(bufferInfos[3].buffer, bufferInfos[9].buffer);
+      std::swap(bufferInfos[4].buffer, bufferInfos[10].buffer);
+    }
 
-  vkUpdateDescriptorSets(DEVICE, bindingCount, writeSets.data(), 0, nullptr);
+    std::vector<VkWriteDescriptorSet> writeSets;
+    for (uint32_t i = 0; i < bindingCount; i++) {
+      writeSets.push_back(VkWriteDescriptorSet{
+          .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+          .dstSet = _bvhDescriptors[set],
+          .dstBinding = i,
+          .dstArrayElement = 0,
+          .descriptorCount = 1,
+          .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+          .pBufferInfo = &bufferInfos[i]});
+    }
+    vkUpdateDescriptorSets(DEVICE, bindingCount, writeSets.data(), 0, nullptr);
+  }
 }
 
 void Bvh::createPipelines() {
   _bvhPipelines.resize(BVH_KERNELS);
 
+  VkPushConstantRange pcRange{.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                              .offset = 0,
+                              .size = 16}; // 4 x int32 push block
+
   VkPipelineLayoutCreateInfo layoutInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = 1,
-      .pSetLayouts = &_bvhDescriptorLayout};
+      .pSetLayouts = &_bvhDescriptorLayout,
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &pcRange};
 
   VK_CHECK(vkCreatePipelineLayout(DEVICE, &layoutInfo, nullptr,
                                   &_bvhPipelineLayout));

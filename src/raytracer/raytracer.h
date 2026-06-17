@@ -52,6 +52,7 @@ public:
   void recordBuffer(uint32_t image_index);
 
   void recordWavefrontBuffer(uint32_t image_index);
+  VkBuffer &sceneBuffer() { return _sceneBuffer; }
 
 private:
   VulkanEngine &_engine;
