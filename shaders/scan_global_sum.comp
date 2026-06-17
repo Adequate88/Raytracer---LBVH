@@ -1,0 +1,36 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+shared uint temp[LOCAL_SIZE];
+
+void main() {
+  int tid = int(gl_LocalInvocationID.x);
+
+  temp[tid] = (tid < num_blocks) ? glob_sum[tid] : 0;
+  barrier();
+
+  for (int offset = 1; offset < LOCAL_SIZE; offset <<= 1) {
+    int idx = (tid + 1) * offset * 2 - 1;
+    if (idx < LOCAL_SIZE)
+      temp[idx] += temp[idx - offset];
+    barrier();
+  }
+
+  if (tid == 0)
+    temp[LOCAL_SIZE - 1] = 0;
+  barrier();
+
+  for (int offset = int(LOCAL_SIZE) >> 1; offset > 0; offset >>= 1) {
+    int idx = (tid + 1) * offset * 2 - 1;
+    if (idx < LOCAL_SIZE) {
+      uint t = temp[idx - offset];
+      temp[idx - offset] = temp[idx];
+      temp[idx] += t;
+    }
+    barrier();
+  }
+
+  if (tid < num_blocks)
+    glob_sum[tid] = temp[tid];
+}

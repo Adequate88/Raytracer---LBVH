@@ -1,0 +1,30 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+shared uint loc_histo[16 * LOCAL_SIZE];
+
+void main() {
+  int tid = int(gl_LocalInvocationID.x);
+  int grp = int(gl_WorkGroupID.x);
+  int groups = int(gl_NumWorkGroups.x);
+
+  for (int digit = 0; digit < 16; digit++)
+    loc_histo[digit * LOCAL_SIZE + tid] =
+      scanned_gram[LOCAL_SIZE * (digit * groups + grp) + tid];
+  barrier();
+
+  for (int i = 0; i < 4; i++) {
+    int idx = tid * 4 + grp * 1024 + i;
+    if (idx >= primitiveCount)
+      continue;
+
+    uint code = mortonCodes[idx];
+    uint primIdx = primIndices[idx];
+    uint digit = (code >> (pass_idx * 4)) & 15;
+    uint pos = loc_histo[digit * LOCAL_SIZE + tid];
+    loc_histo[digit * LOCAL_SIZE + tid] = pos + 1;
+    outputMortonCodes[pos] = code;
+    outputPrimIndices[pos] = primIdx;
+  }
+}

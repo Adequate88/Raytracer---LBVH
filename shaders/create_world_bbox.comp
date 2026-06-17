@@ -1,0 +1,35 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+shared aabb reductionArray[LOCAL_SIZE];
+
+void main() {
+  uint globIdx = gl_GlobalInvocationID.x;
+
+  aabb threadBBox = aabb(vec4(FLT_MAX, FLT_MAX, FLT_MAX, 0.0), vec4(-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0));
+  uint localIdx = gl_LocalInvocationID.x;
+
+  for (uint idx = localIdx; idx < primitiveCount; idx += LOCAL_SIZE) { // Reduce to local array
+    threadBBox.corner1 = min(threadBBox.corner1, primBBoxes[idx].corner1);
+    threadBBox.corner2 = max(threadBBox.corner2, primBBoxes[idx].corner2);
+  }
+  reductionArray[localIdx] = threadBBox;
+
+  barrier();
+
+  for (uint stride = LOCAL_SIZE >> 1; stride >= 1; stride >>= 1) { // Reduce to single from local
+    if (localIdx < stride) {
+      aabb bestBbox = reductionArray[localIdx];
+
+      bestBbox.corner1 = min(bestBbox.corner1, reductionArray[localIdx + stride].corner1);
+      bestBbox.corner2 = max(bestBbox.corner2, reductionArray[localIdx + stride].corner2);
+
+      reductionArray[localIdx] = bestBbox;
+    }
+
+    barrier();
+  }
+
+  if (localIdx == 0) worldBbox = reductionArray[0];
+}

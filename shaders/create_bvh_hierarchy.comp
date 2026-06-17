@@ -1,0 +1,83 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+int find_split(int start, int end)
+{
+  uint start_morton = mortonCodes[start];
+  uint end_morton = mortonCodes[end];
+  bool use_tiebreaker = (start_morton == end_morton);
+  uint common_bits = use_tiebreaker ? (32 + 31 - findMSB(start ^ end)) : 31 - findMSB(start_morton ^ end_morton);
+
+  int step = (end - start);
+  int current_split = start;
+
+  do {
+    step = (step + 1) >> 1;
+    int new_split = current_split + step;
+    if (new_split < end) {
+      int split_msd = use_tiebreaker ? (32 + 31 - findMSB(start ^ new_split)) : 31 - findMSB(start_morton ^ mortonCodes[new_split]);
+      if (split_msd > common_bits)
+        current_split = new_split;
+    }
+  } while (step > 1);
+
+  return current_split;
+}
+
+int delta(int i, int j) {
+  if (j < 0 || j >= primitiveCount) return -1;
+  uint code_i = mortonCodes[i];
+  uint code_j = mortonCodes[j];
+  if (code_i == code_j) return 32 + 31 - findMSB(i ^ j);
+  return 31 - findMSB(code_i ^ code_j);
+}
+
+ivec2 find_range(int idx) {
+  int dir = (delta(idx, idx + 1) - delta(idx, idx - 1)) > 0 ? 1 : -1;
+  int min_bound = delta(idx, idx - dir);
+
+  int l_max = 2;
+  while (delta(idx, idx + dir * l_max) > min_bound)
+    l_max *= 2;
+
+  int l = 0;
+  for (int t = l_max / 2; t >= 1; t /= 2) {
+    if (delta(idx, idx + (t + l) * dir) > min_bound)
+      l += t;
+  }
+
+  int final_point = idx + l * dir;
+  ivec2 range;
+  range.x = (final_point > idx) ? idx : final_point;
+  range.y = (final_point > idx) ? final_point : idx;
+  return range;
+}
+
+void main() {
+  int node_idx = int(gl_GlobalInvocationID.x);
+  if (node_idx >= primitiveCount - 1) return;
+
+  if (node_idx == 0) {
+    nodes[node_idx].parent = -1; // Nodes is in global gpu mem
+  }
+  nodes[node_idx].left = -1;
+  nodes[node_idx].right = -1;
+
+  ivec2 range = find_range(node_idx);
+  int split = find_split(range.x, range.y);
+
+  int left = (split == range.x) ? (split + primitiveCount - 1) : split;
+  int right = (split + 1 == range.y) ? (split + primitiveCount) : (split + 1);
+
+  nodes[node_idx].left = left;
+  nodes[node_idx].right = right;
+  nodes[node_idx].primitive_id = -1;
+  nodes[node_idx].atomic_counter = 0;
+
+  nodes[node_idx].bbox.corner1 = vec4(FLT_MAX, FLT_MAX, FLT_MAX, 0.0);
+  nodes[node_idx].bbox.corner2 = vec4(-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0);
+
+  atomicExchange(nodes[left].parent, node_idx);
+  atomicExchange(nodes[right].parent, node_idx);
+}

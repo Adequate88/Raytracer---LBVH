@@ -1,0 +1,33 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+aabb create_bbox(aabb box0, aabb box1) {
+  aabb new_bbox;
+  new_bbox.corner1 = min(box0.corner1, box1.corner1);
+  new_bbox.corner2 = max(box0.corner2, box1.corner2);
+  return new_bbox;
+}
+
+void main() {
+  int leaf_idx = int(gl_GlobalInvocationID.x);
+
+  if (leaf_idx >= primitiveCount) return;
+
+  int current_idx = primitiveCount - 1 + leaf_idx;
+  int parent_idx = nodes[current_idx].parent;
+
+  while (parent_idx != -1) {
+    int old_count = atomicAdd(nodes[parent_idx].atomic_counter, 1);
+    if (old_count == 0) break; // First visitor waits
+
+    int left_idx = nodes[parent_idx].left;
+    int right_idx = nodes[parent_idx].right;
+    nodes[parent_idx].bbox = create_bbox(nodes[left_idx].bbox, nodes[right_idx].bbox);
+
+    memoryBarrierBuffer();
+
+    current_idx = parent_idx;
+    parent_idx = nodes[current_idx].parent;
+  }
+}
