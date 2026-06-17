@@ -1,0 +1,48 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+shared uint temp[512];
+
+void main() {
+  int tid = int(gl_LocalInvocationID.x);
+  int bid = int(gl_WorkGroupID.x);
+  int id = int(gl_GlobalInvocationID.x);
+  int n = 512;
+  int offset = 1;
+
+  temp[tid * 2] = (id * 2 < histogram_size) ? histogram[id * 2] : 0;
+  temp[tid * 2 + 1] = (id * 2 + 1 < histogram_size) ? histogram[id * 2 + 1] : 0;
+
+  for (int d = n >> 1; d > 0; d >>= 1) {
+    barrier();
+    if (tid < d) {
+      int left = offset * (2 * tid + 1) - 1;
+      int right = offset * (2 * tid + 2) - 1;
+      temp[right] += temp[left];
+    }
+    offset *= 2;
+  }
+  barrier();
+
+  if (tid == 255) {
+    glob_sum[bid] = temp[tid * 2 + 1];
+    temp[tid * 2 + 1] = 0;
+  }
+
+  for (int d = 1; d < n; d *= 2) {
+    offset >>= 1;
+    barrier();
+    if (tid < d) {
+      int left = offset * (2 * tid + 1) - 1;
+      int right = offset * (2 * tid + 2) - 1;
+      uint t = temp[left];
+      temp[left] = temp[right];
+      temp[right] += t;
+    }
+  }
+  barrier();
+
+  if (id * 2 < histogram_size) scanned_gram[id * 2] = temp[tid * 2];
+  if (id * 2 + 1 < histogram_size) scanned_gram[id * 2 + 1] = temp[tid * 2 + 1];
+}

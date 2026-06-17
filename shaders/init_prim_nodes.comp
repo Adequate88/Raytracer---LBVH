@@ -1,0 +1,18 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx >= primitiveCount) return;
+
+  // Init node
+  uint leaf_idx = primitiveCount - 1 + idx;
+
+  nodes[leaf_idx].bbox = primBBoxes[primIndices[idx]];
+  nodes[leaf_idx].primitive_id = int(primIndices[idx]);
+  nodes[leaf_idx].parent = -1;
+  nodes[leaf_idx].left = -1;
+  nodes[leaf_idx].right = -1;
+  nodes[leaf_idx].atomic_counter = 0;
+}

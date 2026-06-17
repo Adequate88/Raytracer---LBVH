@@ -1,0 +1,31 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+#define K 10
+#define CELL_COUNT (1 << K)
+
+void main() {
+  uint thread = gl_GlobalInvocationID.x;
+  if (thread >= primitiveCount) return;
+
+  vec4 barycenter = (primBBoxes[thread].corner2 + primBBoxes[thread].corner1) * 0.5;
+
+  float xCell = CELL_COUNT * (barycenter.x - worldBbox.corner1.x) / (worldBbox.corner2.x - worldBbox.corner1.x);
+  float yCell = CELL_COUNT * (barycenter.y - worldBbox.corner1.y) / (worldBbox.corner2.y - worldBbox.corner1.y);
+  float zCell = CELL_COUNT * (barycenter.z - worldBbox.corner1.z) / (worldBbox.corner2.z - worldBbox.corner1.z);
+
+  uint x = min(uint(xCell), CELL_COUNT - 1);
+  uint y = min(uint(yCell), CELL_COUNT - 1);
+  uint z = min(uint(zCell), CELL_COUNT - 1);
+
+  uint code = 0;
+  for (int j = 0; j < K; j++) {
+    code |= ((x >> j) & 1) << (3 * j);
+    code |= ((y >> j) & 1) << (3 * j + 1);
+    code |= ((z >> j) & 1) << (3 * j + 2);
+  }
+
+  mortonCodes[thread] = code;
+  primIndices[thread] = thread;
+}

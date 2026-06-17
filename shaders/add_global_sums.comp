@@ -1,0 +1,12 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+void main() {
+  int id = int(gl_GlobalInvocationID.x);
+  int bid = int(gl_WorkGroupID.x);
+  if (id * 2 < histogram_size)
+    scanned_gram[id * 2] += glob_sum[bid];
+  if (id * 2 + 1 < histogram_size)
+    scanned_gram[id * 2 + 1] += glob_sum[bid];
+}

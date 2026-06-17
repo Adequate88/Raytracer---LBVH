@@ -1,0 +1,14 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+void main() {
+  uint idx = gl_GlobalInvocationID.x;
+  if (idx >= primitiveCount) return;
+
+  // Create bbox
+  triangle tri = scene.triangles[idx];
+
+  primBBoxes[idx].corner1 = vec4(min(tri.v0.xyz, min(tri.v1.xyz, tri.v2.xyz)), 0.0f);
+  primBBoxes[idx].corner2 = vec4(max(tri.v0.xyz, max(tri.v1.xyz, tri.v2.xyz)), 0.0f);
+}
