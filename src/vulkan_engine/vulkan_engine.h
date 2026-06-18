@@ -36,6 +36,8 @@ public:
   VkPhysicalDevice _gpu;
   VkSurfaceKHR _surface;
 
+  float _timestampPeriod = 1.0f;
+
   // Swapchain
   VkSwapchainKHR _swapchain;
   uint32_t _swapchainImageCount;

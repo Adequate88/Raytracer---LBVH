@@ -1,4 +1,5 @@
 #include "raytracer.h"
+#include "metrics_macros.h"
 #include "vulkan_engine.h"
 #include "vulkan_types.h"
 #include "vulkan_utils.h"
@@ -12,10 +13,20 @@ void Raytracer::initRaytracer(const void *data, size_t size,
                               const void *cameraData) {
   _cameraConstants = cameraData;
 
+  createTimestampPool();
   createRenderTarget();
   createSceneBuffer(data, size);
   createDescriptors();
   createPipeline();
+}
+
+void Raytracer::createTimestampPool() {
+  VkQueryPoolCreateInfo queryInfo{.sType =
+                                      VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                  .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                                  .queryCount = 2};
+  VK_CHECK(vkCreateQueryPool(_engine._device, &queryInfo, nullptr,
+                             &_timestampPool));
 }
 
 void Raytracer::createRenderTarget() {
@@ -212,6 +223,9 @@ void Raytracer::recordBuffer(uint32_t image_index) {
   VK_CHECK(vkBeginCommandBuffer(_engine._commandBuffers[_engine.frame_index],
                                 &beginInfo));
 
+  vkCmdResetQueryPool(_engine._commandBuffers[_engine.frame_index],
+                      _timestampPool, 0, 2);
+
   vkCmdPushConstants(_engine._commandBuffers[_engine.frame_index], _layout,
                      VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
                      _cameraConstants); // TODO ALSO HARDCODE 64 bytes here
@@ -228,9 +242,16 @@ void Raytracer::recordBuffer(uint32_t image_index) {
                           VK_PIPELINE_BIND_POINT_COMPUTE, _layout, 0, 1,
                           &_descriptorSet, 0, nullptr);
 
+  vkCmdWriteTimestamp2(_engine._commandBuffers[_engine.frame_index],
+                       VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, _timestampPool, 0);
+
   vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
                 (_engine._windowExtent.width + 15) / 16,
                 (_engine._windowExtent.height + 15) / 16, 1);
+
+  vkCmdWriteTimestamp2(_engine._commandBuffers[_engine.frame_index],
+                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, _timestampPool,
+                       1);
 
   _engine.transition_image_layout(
       _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
@@ -265,4 +286,16 @@ void Raytracer::recordBuffer(uint32_t image_index) {
       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
   VK_CHECK(vkEndCommandBuffer(_engine._commandBuffers[_engine.frame_index]));
+}
+
+void Raytracer::recordRenderTime() {
+  uint64_t timestamps[2];
+  VK_CHECK(vkGetQueryPoolResults(
+      _engine._device, _timestampPool, 0, 2, sizeof(timestamps), timestamps,
+      sizeof(uint64_t),
+      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
+
+  float ms = static_cast<float>(timestamps[1] - timestamps[0]) *
+             _engine._timestampPeriod * 1e-6f;
+  METRIC_SET_VALUE("Total Rendering Time", ms);
 }
