@@ -40,6 +40,9 @@ public:
   VkDeviceMemory _wavefrontHitRecordBufferMemory;
   VkDeviceMemory _wavefrontFinalRadianceBufferMemory;
   VkDeviceMemory _wavefrontNextRayCountBufferMemory;
+
+  VkMemoryBarrier2 _wavefrontMemoryBarrier;
+  VkDependencyInfo _wavefrontMemoryDependency;
   // End of wavefront variables
 
   VkDeviceMemory _renderTargetMemory;
@@ -47,6 +50,8 @@ public:
 
   void initRaytracer(const void *data, size_t size, const void *cameraData);
   void recordBuffer(uint32_t image_index);
+
+  void recordWavefrontBuffer(uint32_t image_index);
 
 private:
   VulkanEngine &_engine;
@@ -73,4 +78,5 @@ private:
   void createWavefrontBuffers();
   void createWavefrontDescriptors();
   void createWavefrontPipelines();
+  void createMemoryBarrier();
 };
