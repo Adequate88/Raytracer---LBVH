@@ -76,6 +76,10 @@ public:
                                VkPipelineStageFlags2 src_stage_flags,
                                VkPipelineStageFlags2 dst_stage_flags);
 
+  void allocate_buffer(VkBuffer& buffer, VkDeviceMemory& deviceMemory,
+      VkDeviceSize size, VkBufferUsageFlags usage_flags,
+      VkMemoryPropertyFlags properties);
+
   uint32_t frame_index = 0;
 
 private:
@@ -87,10 +91,6 @@ private:
   void create_sync_objects();
 
   void record_buffer(uint32_t image_index);
-
-  void allocate_buffer(VkBuffer &buffer, VkDeviceMemory &deviceMemory,
-                       VkDeviceSize size, VkBufferUsageFlags usage_flags,
-                       VkMemoryPropertyFlags properties);
 
   uint32_t find_memory_type(uint32_t typeFilter,
                             VkMemoryPropertyFlags properties);

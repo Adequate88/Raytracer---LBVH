@@ -15,6 +15,23 @@ public:
   VkDescriptorPool _descriptorPool;
   VkPipelineLayout _layout;
   VkPipeline _pipeline;
+  // Wavefront variables:
+  VkDescriptorSetLayout _wavefrontGenerateDescriptorSetLayout;
+  VkDescriptorSetLayout _wavefrontExtendDescriptorSetLayout;
+  VkDescriptorSetLayout _wavefrontShadeDescriptorSetLayout;
+  VkDescriptorSetLayout _wavefrontFinalizeDescriptorSetLayout;
+  VkDescriptorSet _wavefrontGenerateDescriptorSet;
+  VkDescriptorSet _wavefrontExtendDescriptorSets[2];
+  VkDescriptorSet _wavefrontShadeDescriptorSets[2];
+  VkDescriptorSet _wavefrontFinalizeDescriptorSet;
+  VkDescriptorPool _wavefrontDescriptorPool;
+
+  VkDeviceMemory _wavefrontRayBuffersMemory[2];
+  VkDeviceMemory _wavefrontPathStateBuffersMemory[2];
+  VkDeviceMemory _wavefrontHitRecordBufferMemory;
+  VkDeviceMemory _wavefrontFinalRadianceBufferMemory;
+  VkDeviceMemory _wavefrontNextRayCountBufferMemory;
+  // End of wavefront variables
 
   VkDeviceMemory _renderTargetMemory;
   VkDeviceMemory _sceneMemory;
@@ -30,10 +47,21 @@ private:
   VkImageView _renderTargetView;
 
   VkBuffer _sceneBuffer;
+  // Wavefront variables:
+  VkBuffer _wavefrontRayBuffers[2];
+  VkBuffer _wavefrontPathStateBuffers[2];
+  VkBuffer _wavefrontHitRecordBuffer;
+  VkBuffer _wavefrontFinalRadianceBuffer;
+  VkBuffer _wavefrontNextRayCountBuffer;
+  // End of wavefront variables
 
   void createRenderTarget();
   void createDescriptors();
   void createSceneBuffer(const void *data, size_t size);
   void createShaderModule();
   void createPipeline();
+  // Wavefront creation functions
+  void createWavefrontBuffers();
+  void createWavefrontDescriptors();
+  void createWavefrontPipelines();
 };
