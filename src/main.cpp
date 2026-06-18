@@ -5,8 +5,9 @@
 // and SAME window size as the current Vulkan run: teapot.obj, 600x600, 20 spp.
 //
 // It emits EXACTLY the same 13 metric rows the Vulkan/main version emits (same
-// names, same definitions, no extras). Reverted (git checkout) afterward so the
-// working tree is left untouched; results are written OUTSIDE the repo.
+// names, same definitions, no extras), and writes the rendered image so it can
+// be compared visually against the Vulkan output. Lives on its own branch
+// (original-opencl-benchmark); outputs are written OUTSIDE the repo.
 // =============================================================================
 #include "camera.h"   // camera::render(LBVH&)  -> "Total Rendering Time"
 #include "lbvh_gpu.h" // LBVH (OpenCL build)    -> kernel-group metrics + getters
@@ -14,6 +15,11 @@
 #include "mesh.h"
 #include "metrics_macros.h"
 #include "types.h"
+#include <cstdint>
+#include <vector>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 int main() {
   // --- Scene: identical to scenes.h:load_teapot(600, 600, 20) ---------------
@@ -45,6 +51,24 @@ int main() {
                    static_cast<float>(bvh.get_bvh_init_ms()));
   METRIC_SET_VALUE("Total BVH Construction Time",
                    static_cast<float>(bvh.get_construction_ms()));
+
+  // --- Save one clean render to PNG for visual comparison -------------------
+  // camera::render appends to img.data (BGRA), so clear first to keep exactly
+  // one frame, then swap B<->R for stb's RGBA expectation.
+  cam.img.data.clear();
+  cam.render(bvh);
+  {
+    std::vector<uint8_t> rgba(cam.img.data.size());
+    for (size_t p = 0; p + 3 < cam.img.data.size(); p += 4) {
+      rgba[p + 0] = cam.img.data[p + 2]; // R
+      rgba[p + 1] = cam.img.data[p + 1]; // G
+      rgba[p + 2] = cam.img.data[p + 0]; // B
+      rgba[p + 3] = cam.img.data[p + 3]; // A
+    }
+    stbi_write_png("/home/growlithe/Portfolio/original_opencl_cpu_render.png",
+                   cam.image_width, cam.image_height, 4, rgba.data(),
+                   cam.image_width * 4);
+  }
 
   METRIC_SET_VALUE("Ray Count", static_cast<float>(600 * 600 * 20));
 
