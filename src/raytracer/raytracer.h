@@ -50,6 +50,7 @@ public:
 
   void initRaytracer(const void *data, size_t size, const void *cameraData);
   void recordBuffer(uint32_t image_index);
+  void recordRenderTime();
 
   void recordWavefrontBuffer(uint32_t image_index);
   VkBuffer &sceneBuffer() { return _sceneBuffer; }
@@ -70,6 +71,9 @@ private:
   VkBuffer _wavefrontNextRayCountBuffer;
   // End of wavefront variables
 
+  VkQueryPool _timestampPool;
+
+  void createTimestampPool();
   void createRenderTarget();
   void createDescriptors();
   void createSceneBuffer(const void *data, size_t size);

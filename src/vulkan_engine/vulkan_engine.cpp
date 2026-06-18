@@ -13,7 +13,11 @@
 #include <vulkan/vulkan_core.h>
 
 // Validation Layers
+#ifdef EVALUATE
+constexpr bool bUseValidationLayers = false;
+#else
 constexpr bool bUseValidationLayers = true;
+#endif
 std::vector<char const *> validationLayers = {"VK_LAYER_KHRONOS_validation"};
 
 //
@@ -231,6 +235,7 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
     VkPhysicalDeviceProperties2 deviceProperties{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
     vkGetPhysicalDeviceProperties2(_gpu, &deviceProperties);
+    _timestampPeriod = deviceProperties.properties.limits.timestampPeriod;
     fmt::print("GPU found: {}\n", deviceProperties.properties.deviceName);
   } else {
     fmt::print("No valid GPUs found\n");

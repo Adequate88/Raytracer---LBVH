@@ -1,10 +1,12 @@
 #include "bvh.h"
+#include "metrics_macros.h"
 #include "vulkan_engine.h"
 #include "vulkan_utils.h"
 #include <cstddef>
 #include <cstdint>
 #include <sys/types.h>
 #include <utility>
+#include <vector>
 #include <vulkan/vulkan_core.h>
 
 Bvh::Bvh(VulkanEngine &engine, size_t primitiveCount)
@@ -21,6 +23,16 @@ void Bvh::init(VkBuffer &primBuffer) {
 }
 
 void Bvh::build() {
+  constexpr uint32_t maxDispatches = 3 + 8 * 5 + 3;
+  VkQueryPoolCreateInfo queryInfo{.sType =
+                                      VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                                  .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                                  .queryCount = maxDispatches * 2};
+  VkQueryPool timestampPool;
+  VK_CHECK(vkCreateQueryPool(DEVICE, &queryInfo, nullptr, &timestampPool));
+
+  std::vector<uint32_t> kernelOfDispatch;
+  uint32_t queryCount = 0;
 
   VkCommandPool buildPool;
   VkCommandPoolCreateInfo poolInfo{
@@ -44,6 +56,8 @@ void Bvh::build() {
 
   VK_CHECK(vkBeginCommandBuffer(buildCommandBuffer, &beginInfo));
 
+  vkCmdResetQueryPool(buildCommandBuffer, timestampPool, 0, maxDispatches * 2);
+
   struct PushConstants {
     int32_t primitiveCount;
     int32_t pass_idx;
@@ -58,7 +72,16 @@ void Bvh::build() {
                       _bvhPipelines[pipelineIdx]);
     vkCmdBindDescriptorSets(buildCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _bvhPipelineLayout, 0, 1, &set, 0, nullptr);
+
+    vkCmdWriteTimestamp2(buildCommandBuffer,
+                         VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, timestampPool,
+                         queryCount);
     vkCmdDispatch(buildCommandBuffer, groupCount, 1, 1);
+    vkCmdWriteTimestamp2(buildCommandBuffer,
+                         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, timestampPool,
+                         queryCount + 1);
+    kernelOfDispatch.push_back(pipelineIdx);
+    queryCount += 2;
 
     VkMemoryBarrier2 barrier{
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
@@ -111,6 +134,36 @@ void Bvh::build() {
   VK_CHECK(vkQueueSubmit(_engine._graphicsQueue, 1, &submit, fence));
   VK_CHECK(vkWaitForFences(DEVICE, 1, &fence, VK_TRUE, UINT64_MAX));
 
+#ifdef EVALUATE
+  std::vector<uint64_t> timestamps(queryCount);
+  VK_CHECK(vkGetQueryPoolResults(
+      DEVICE, timestampPool, 0, queryCount,
+      timestamps.size() * sizeof(uint64_t), timestamps.data(), sizeof(uint64_t),
+      VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
+
+  float perKernel[BVH_KERNELS] = {};
+  for (uint32_t d = 0; d < kernelOfDispatch.size(); d++) {
+    float ms = static_cast<float>(timestamps[2 * d + 1] - timestamps[2 * d]) *
+               _engine._timestampPeriod * 1e-6f;
+    perKernel[kernelOfDispatch[d]] += ms;
+  }
+  float bboxSetup = perKernel[0] + perKernel[1];
+  float morton = perKernel[2];
+  float radix =
+      perKernel[3] + perKernel[4] + perKernel[5] + perKernel[6] + perKernel[7];
+  float hierarchy = perKernel[8] + perKernel[9];
+  float bbox = perKernel[10];
+
+  METRIC_SET_VALUE("Primitive+World BBox Kernel", bboxSetup);
+  METRIC_SET_VALUE("Morton Code Kernel", morton);
+  METRIC_SET_VALUE("Radix Sort Kernel", radix);
+  METRIC_SET_VALUE("Hierarchy Creation Kernel", hierarchy);
+  METRIC_SET_VALUE("Bounding Box Kernel", bbox);
+  METRIC_SET_VALUE("Total BVH Kernel Time",
+                   bboxSetup + morton + radix + hierarchy + bbox);
+#endif
+
+  vkDestroyQueryPool(DEVICE, timestampPool, nullptr);
   vkDestroyFence(DEVICE, fence, nullptr);
   vkDestroyCommandPool(DEVICE, buildPool, nullptr);
 }
