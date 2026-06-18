@@ -3,19 +3,18 @@
 #include "vec3.h"
 
 void camera::render(LBVH &world) {
-  METRIC_START_TIME("HOST_RENDER");
+  METRIC_START_TIME("Total Rendering Time");
   for (int j = 0; j < image_height; j++) {
     for (int i = 0; i < image_width; i++) {
       color pixel_color(0, 0, 0);
       for (int sample = 0; sample < samples_per_pixel; sample++) {
         ray r = get_ray(i, j);
-        METRIC_INCREMENT("RAY_COUNT");
         pixel_color += ray_color(r, max_depth, world);
       }
       write_color(img.data, pixel_samples_scale * pixel_color);
     }
   }
-  METRIC_END_TIME("HOST_RENDER");
+  METRIC_END_TIME("Total Rendering Time");
 }
 
 void camera::initialize() {

@@ -62,6 +62,14 @@ public:
   int get_primitive_count() const;
   const std::vector<shared_ptr<hittable>> &get_objects() const;
 
+  // Host-side phase timings (ms), to mirror the Vulkan metric split:
+  //   device init  -> "Vulkan Device Init"  (analog of engine.init())
+  //   bvh init     -> "BVH Initialization"  (program build + kernels + buffers)
+  //   construction -> "Total BVH Construction Time" (bvh init + build, excl dev init)
+  double get_device_init_ms() const;
+  double get_bvh_init_ms() const;
+  double get_construction_ms() const;
+
 private:
   cl_platform_id platform = nullptr;
   cl_device_id device = nullptr;
@@ -98,20 +106,26 @@ private:
   uint32_t k = 10;
   uint32_t cell_count = 0;
 
+  double t_device_init_ms = 0.0;
+  double t_bvh_init_ms = 0.0;
+  double t_construction_ms = 0.0;
+
   bool hit_recursive(const ray &r, interval ray_t, hit_record &rec,
                      const int node_idx) const;
 
-  void radix_sort();
+  // Returns total device time (ms) of the radix-sort kernels.
+  float radix_sort();
 
   int compute_depth(int node_idx) const;
 
   void check_cl_error(cl_int err, const char *operation) const;
 
-  void record_kernel_time(cl_event event, const char *name) const;
-  void record_kernel_time(const std::vector<cl_event> &events,
-                          const char *name) const;
+  // Return pure device execution time (ms) from OpenCL profiling events.
+  float record_kernel_time(cl_event event) const;
+  float record_kernel_time(const std::vector<cl_event> &events) const;
 
-  void init_opencl();
+  void init_device();                // platform/device/context/queue
+  void build_program_and_kernels();  // program build + clCreateKernel
   void cleanup_opencl();
 
   std::string load_kernel_source_with_includes(

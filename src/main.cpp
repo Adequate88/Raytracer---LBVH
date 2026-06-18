@@ -1,89 +1,74 @@
-#include "bvh.h"
-#include "lbvh_gpu.h"
+// =============================================================================
+// TEMPORARY benchmark driver (NOT part of the project).
+// Runs the ORIGINAL "OpenCL BVH + CPU raytracer" pipeline that already lives in
+// this repo (LBVH = lbvh_gpu.cpp, camera::render = camera.cpp) on the SAME scene
+// and SAME window size as the current Vulkan run: teapot.obj, 600x600, 20 spp.
+//
+// It emits EXACTLY the same 13 metric rows the Vulkan/main version emits (same
+// names, same definitions, no extras). Reverted (git checkout) afterward so the
+// working tree is left untouched; results are written OUTSIDE the repo.
+// =============================================================================
+#include "camera.h"   // camera::render(LBVH&)  -> "Total Rendering Time"
+#include "lbvh_gpu.h" // LBVH (OpenCL build)    -> kernel-group metrics + getters
+#include "material.h"
+#include "mesh.h"
 #include "metrics_macros.h"
-#include "raytracer.h"
-#include "scenes.h"
-#include "triangle.h"
 #include "types.h"
-#include "vulkan_engine.h"
-#include <SDL3/SDL.h>
-#include <cstdint>
 
 int main() {
+  // --- Scene: identical to scenes.h:load_teapot(600, 600, 20) ---------------
+  auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
+  auto mesh_triangles = mesh::load_obj("models/teapot.obj", mat, true, 0.5);
+  auto &objects = mesh_triangles->objects;
 
-  VulkanEngine engine;
-  METRIC_START_TIME("Vulkan Device Init");
-  engine.init();
-  METRIC_END_TIME("Vulkan Device Init");
+  camera cam;
+  cam.image_width = 600;
+  cam.image_height = 600;
+  cam.samples_per_pixel = 20;
+  cam.max_depth = 10;
+  cam.background = color(0.7, 0.8, 1.00);
+  cam.vfov = 30;
+  cam.lookfrom = point3(-2, 3, 6);
+  cam.lookat = point3(-0.3, 1.0, 0);
+  cam.vup = vec3(0, 1, 0);
+  cam.defocus_angle = 0;
+  cam.focus_dist = 3.0;
+  cam.initialize();
 
-  Raytracer raytracer(engine);
+  // --- Single build: capture the single-shot init metrics -------------------
+  // (Vulkan emits these once, without stddev: Vulkan Device Init, BVH
+  // Initialization, Total BVH Construction Time.)
+  LBVH bvh(objects);
+  METRIC_SET_VALUE("Vulkan Device Init",
+                   static_cast<float>(bvh.get_device_init_ms()));
+  METRIC_SET_VALUE("BVH Initialization",
+                   static_cast<float>(bvh.get_bvh_init_ms()));
+  METRIC_SET_VALUE("Total BVH Construction Time",
+                   static_cast<float>(bvh.get_construction_ms()));
 
-  //auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  // LBVH bvh_tree(config.world.objects);
-  //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
-  //  engine.write_image(config.cam.img.data, config.cam.img.width,
-  //  config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
-  //
+  METRIC_SET_VALUE("Ray Count", static_cast<float>(600 * 600 * 20));
 
-  config.cam.initialize();
-
-  raytracer.initRaytracer(config.world.data(),
-                          config.world.size() * sizeof(triangle_new),
-                          &config.cam.gpu_constants);
-
-  Bvh bvh(engine, config.world.size());
-
-  METRIC_START_TIME("Total BVH Construction Time");
-  METRIC_START_TIME("BVH Initialization");
-  bvh.init(raytracer.sceneBuffer());
-  METRIC_END_TIME("BVH Initialization");
-  bvh.build();
-  METRIC_END_TIME("Total BVH Construction Time");
-
-  METRIC_BENCHMARK(100, 10, bvh.build());
-
-  METRIC_SET_VALUE("Ray Count",
-                   static_cast<float>(IMAGE_WIDTH * IMAGE_HEIGHT *
-                                      config.cam.samples_per_pixel));
-
-  SDL_Event e;
-
-#ifdef EVALUATE
-  METRIC_BENCHMARK(15, 3, {
-    while (SDL_PollEvent(&e) != 0) {
-    }
-    uint32_t idx = engine.begin_frame();
-    raytracer.recordBuffer(idx);
-    engine.end_frame(idx);
-    raytracer.recordRenderTime();
+  // --- Sampled CPU render: "Total Rendering Time" + "Rays traced per second" -
+  // (Vulkan samples the render; fewer iterations here since each CPU frame is
+  // ~50 s. "Total Rendering Time" is emitted by camera::render.)
+  METRIC_BENCHMARK(3, 1, {
+    cam.render(bvh);
     METRIC_SET_VALUE("Rays traced per second",
                      METRIC_READ("Ray Count") /
                          (METRIC_READ("Total Rendering Time") * ms_scale));
   });
-#else
-  bool bQuit = false;
-  while (!bQuit) {
-    while (SDL_PollEvent(&e) != 0) {
-      if (e.type == SDL_EVENT_QUIT)
-        bQuit = true;
-    }
-    uint32_t idx = engine.begin_frame();
-    raytracer.recordBuffer(idx);
-    engine.end_frame(idx);
-  }
-#endif
 
-  VK_CHECK(vkDeviceWaitIdle(engine._device));
+  // --- Sampled BVH construction: the 6 device kernel-group metrics ----------
+  // (Mirrors the Vulkan METRIC_BENCHMARK over bvh.build(); the LBVH ctor emits
+  // the grouped kernel times, so each rebuild produces one sample.)
+  METRIC_BENCHMARK(50, 5, { LBVH sample_bvh(objects); });
 
-#ifdef EVALUATE
+  // Total Run Time, same formula as the Vulkan main.
   METRIC_SET_VALUE("Total Run Time",
                    METRIC_READ("Vulkan Device Init") +
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
-#endif
 
-  METRIC_EXPORT("data/raytracer_no_accel_traversal.csv");
-
+  METRIC_EXPORT("/home/growlithe/Portfolio/original_opencl_cpu_metrics.csv");
   return 0;
 }

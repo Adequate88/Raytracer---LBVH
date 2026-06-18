@@ -1,54 +1,72 @@
 #include "lbvh_gpu.h"
 #include "metrics_macros.h"
+#include <chrono>
+
+// Wall-clock helper (always on; getters need it regardless of EVALUATE).
+static inline double now_ms() {
+  return std::chrono::duration<double, std::milli>(
+             std::chrono::high_resolution_clock::now().time_since_epoch())
+      .count();
+}
 
 LBVH::LBVH(std::vector<shared_ptr<hittable>> &objects)
     : objects(objects), N(objects.size()) {
   nodes.resize(2 * N - 1);
-  METRIC_START_TIME("HOST_BVH_TOTAL");
 
   if (N == 0)
     return;
 
-  METRIC_START_TIME("HOST_OPENCL_INIT");
-  init_opencl();
-  METRIC_END_TIME("HOST_OPENCL_INIT");
+  // --- "Vulkan Device Init" analog: get an OpenCL device + queue -------------
+  double d0 = now_ms();
+  init_device();
+  t_device_init_ms = now_ms() - d0;
 
-  METRIC_START_TIME("HOST_DATA_PREP");
+  // --- "Total BVH Construction Time" starts here (excludes device init) ------
+  double c0 = now_ms();
+
+  // --- "BVH Initialization" part 1: build compute program + kernels ----------
+  // (Analog of Vulkan createPipelines: compiling the compute shaders.)
+  double bi0 = now_ms();
+  build_program_and_kernels();
+  t_bvh_init_ms = now_ms() - bi0;
+
   morton_list.resize(N);
   cell_count = 1 << k;
 
+  // --- "Primitive+World BBox Kernel" analog: per-primitive + scene bbox ------
+  // Vulkan does this as two GPU kernels (init_prim_bboxes + create_world_bbox);
+  // the original computes the same quantities on the host.
+  double pb0 = now_ms();
   temp_scene_bbox = AABB::empty;
   for (int i = 0; i < N; i++) {
     temp_scene_bbox = AABB(temp_scene_bbox, objects[i]->bounding_box());
     primitive_bboxes.push_back(objects[i]->bounding_box());
     centroids.push_back(objects[i]->get_centroid());
   }
-
   std::vector<gpu_float3> gpu_centroids(N);
-  for (int i = 0; i < N; i++) {
+  for (int i = 0; i < N; i++)
     gpu_centroids[i] = gpu_float3(centroids[i]);
-  }
+  float primWorldBbox = static_cast<float>(now_ms() - pb0);
 
+  // --- "BVH Initialization" part 2: allocate device buffers ------------------
+  double bi1 = now_ms();
   cl_int err;
   buf_centroids =
       clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                      N * sizeof(gpu_float3), gpu_centroids.data(), &err);
   check_cl_error(err, "clCreateBuffer(buf_centroids)");
-
   buf_bboxes = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
                               N * sizeof(AABB), primitive_bboxes.data(), &err);
   check_cl_error(err, "clCreateBuffer(buf_bboxes)");
-
   buf_morton_list = clCreateBuffer(context, CL_MEM_READ_WRITE,
                                    N * sizeof(morton_primitive), nullptr, &err);
   check_cl_error(err, "clCreateBuffer(buf_morton_list)");
-
   buf_nodes = clCreateBuffer(context, CL_MEM_READ_WRITE,
                              (2 * N - 1) * sizeof(lbvh_node), nullptr, &err);
   check_cl_error(err, "clCreateBuffer(buf_nodes)");
-  METRIC_END_TIME("HOST_DATA_PREP");
+  t_bvh_init_ms += now_ms() - bi1;
 
-  METRIC_START_TIME("HOST_MORTON");
+  // --- "Morton Code Kernel" --------------------------------------------------
   err = clSetKernelArg(kernel_morton, 0, sizeof(cl_mem), &buf_centroids);
   err |= clSetKernelArg(kernel_morton, 1, sizeof(AABB), &temp_scene_bbox);
   err |= clSetKernelArg(kernel_morton, 2, sizeof(int), &N);
@@ -64,23 +82,21 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>> &objects)
                                &ev_morton);
   check_cl_error(err, "clEnqueueNDRangeKernel(kernel_morton)");
   clFinish(queue);
-  record_kernel_time(ev_morton, "GPU_MORTON");
+  float morton = record_kernel_time(ev_morton);
 
   err = clEnqueueReadBuffer(queue, buf_morton_list, CL_TRUE, 0,
                             N * sizeof(morton_primitive), morton_list.data(), 0,
                             nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(buf_morton_list)");
-  METRIC_END_TIME("HOST_MORTON");
 
-  METRIC_START_TIME("HOST_RADIX_SORT");
-  radix_sort();
+  // --- "Radix Sort Kernel" ---------------------------------------------------
+  float radix = radix_sort();
   err = clEnqueueReadBuffer(queue, buf_morton_list, CL_TRUE, 0,
                             N * sizeof(morton_primitive), morton_list.data(), 0,
                             nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(sorted morton_list)");
-  METRIC_END_TIME("HOST_RADIX_SORT");
 
-  METRIC_START_TIME("HOST_HIERARCHY");
+  // --- "Hierarchy Creation Kernel" (init leaves + create hierarchy) ----------
   err = clSetKernelArg(kernel_init_leaves, 0, sizeof(cl_mem), &buf_morton_list);
   err |= clSetKernelArg(kernel_init_leaves, 1, sizeof(cl_mem), &buf_bboxes);
   err |= clSetKernelArg(kernel_init_leaves, 2, sizeof(int), &N);
@@ -93,7 +109,7 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>> &objects)
                                &ev_init_leaves);
   check_cl_error(err, "clEnqueueNDRangeKernel(kernel_init_leaves)");
   clFinish(queue);
-  record_kernel_time(ev_init_leaves, "GPU_INIT_LEAVES");
+  float il = record_kernel_time(ev_init_leaves);
 
   err = clSetKernelArg(kernel_hierarchy, 0, sizeof(cl_mem), &buf_morton_list);
   err |= clSetKernelArg(kernel_hierarchy, 1, sizeof(int), &N);
@@ -107,15 +123,15 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>> &objects)
                                &ev_hierarchy);
   check_cl_error(err, "clEnqueueNDRangeKernel(kernel_hierarchy)");
   clFinish(queue);
-  record_kernel_time(ev_hierarchy, "GPU_HIERARCHY");
+  float hier = record_kernel_time(ev_hierarchy);
+  float hierarchy = il + hier;
 
   err = clEnqueueReadBuffer(queue, buf_nodes, CL_TRUE, 0,
                             (2 * N - 1) * sizeof(lbvh_node), nodes.data(), 0,
                             nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(buf_nodes)");
-  METRIC_END_TIME("HOST_HIERARCHY");
 
-  METRIC_START_TIME("HOST_BBOX");
+  // --- "Bounding Box Kernel" -------------------------------------------------
   err = clSetKernelArg(kernel_build_bboxes, 0, sizeof(cl_mem), &buf_nodes);
   err |= clSetKernelArg(kernel_build_bboxes, 1, sizeof(int), &N);
   check_cl_error(err, "clSetKernelArg(kernel_build_bboxes)");
@@ -126,15 +142,23 @@ LBVH::LBVH(std::vector<shared_ptr<hittable>> &objects)
                                &ev_build_bboxes);
   check_cl_error(err, "clEnqueueNDRangeKernel(kernel_build_bboxes)");
   clFinish(queue);
-  record_kernel_time(ev_build_bboxes, "GPU_BBOX");
+  float bbox = record_kernel_time(ev_build_bboxes);
 
   err = clEnqueueReadBuffer(queue, buf_nodes, CL_TRUE, 0,
                             (2 * N - 1) * sizeof(lbvh_node), nodes.data(), 0,
                             nullptr, nullptr);
   check_cl_error(err, "clEnqueueReadBuffer(buf_nodes after bbox)");
-  METRIC_END_TIME("HOST_BBOX");
 
-  METRIC_END_TIME("HOST_BVH_TOTAL");
+  t_construction_ms = now_ms() - c0;
+
+  // --- Emit the same grouped kernel metrics the Vulkan build emits -----------
+  METRIC_SET_VALUE("Primitive+World BBox Kernel", primWorldBbox);
+  METRIC_SET_VALUE("Morton Code Kernel", morton);
+  METRIC_SET_VALUE("Radix Sort Kernel", radix);
+  METRIC_SET_VALUE("Hierarchy Creation Kernel", hierarchy);
+  METRIC_SET_VALUE("Bounding Box Kernel", bbox);
+  METRIC_SET_VALUE("Total BVH Kernel Time",
+                   primWorldBbox + morton + radix + hierarchy + bbox);
 }
 
 LBVH::~LBVH() { cleanup_opencl(); }
@@ -144,6 +168,10 @@ bool LBVH::hit(const ray &r, interval ray_t, hit_record &rec) const {
 }
 
 int LBVH::get_tree_depth() const { return compute_depth(0); }
+
+double LBVH::get_device_init_ms() const { return t_device_init_ms; }
+double LBVH::get_bvh_init_ms() const { return t_bvh_init_ms; }
+double LBVH::get_construction_ms() const { return t_construction_ms; }
 
 cl_context LBVH::get_opencl_context() const { return context; }
 cl_device_id LBVH::get_opencl_device() const { return device; }
@@ -159,14 +187,12 @@ bool LBVH::hit_recursive(const ray &r, interval ray_t, hit_record &rec,
                          const int node_idx) const {
   if (node_idx >= 2 * N - 1 || node_idx < 0)
     return false;
-  METRIC_INCREMENT("NODES_VISITED");
 
   const lbvh_node &node = nodes[node_idx];
   if (!node.bbox.hit(r, ray_t))
     return false;
 
   if (node.is_leaf()) {
-    METRIC_INCREMENT("PRIMITIVE_TESTS");
     return objects[node.primitive_id]->hit(r, ray_t, rec);
   }
 
@@ -176,7 +202,7 @@ bool LBVH::hit_recursive(const ray &r, interval ray_t, hit_record &rec,
   return hit_left || hit_right;
 }
 
-void LBVH::radix_sort() {
+float LBVH::radix_sort() {
   cl_int err;
   const int num_buckets = 16;
   const int num_passes = 8;
@@ -316,11 +342,14 @@ void LBVH::radix_sort() {
   }
   clFinish(queue);
 
-  record_kernel_time(ev_histogram, "GPU_RADIX_HISTOGRAM");
-  record_kernel_time(ev_prefix, "GPU_RADIX_PREFIX");
-  record_kernel_time(ev_scan, "GPU_RADIX_SCAN");
-  record_kernel_time(ev_add, "GPU_RADIX_ADD");
-  record_kernel_time(ev_scatter, "GPU_RADIX_SCATTER");
+  // Total device time of the radix-sort stage = sum of its sub-kernels.
+  float total = 0.0f;
+  total += record_kernel_time(ev_histogram);
+  total += record_kernel_time(ev_prefix);
+  total += record_kernel_time(ev_scan);
+  total += record_kernel_time(ev_add);
+  total += record_kernel_time(ev_scatter);
+  return total;
 }
 
 int LBVH::compute_depth(int node_idx) const {
@@ -340,7 +369,7 @@ void LBVH::check_cl_error(cl_int err, const char *operation) const {
   }
 }
 
-void LBVH::record_kernel_time(cl_event event, const char *name) const {
+float LBVH::record_kernel_time(cl_event event) const {
   clWaitForEvents(1, &event);
 
   cl_ulong start_ns = 0;
@@ -350,16 +379,14 @@ void LBVH::record_kernel_time(cl_event event, const char *name) const {
   clGetEventProfilingInfo(event, CL_PROFILING_COMMAND_END, sizeof(cl_ulong),
                           &end_ns, nullptr);
 
-  // Convert from nano to ms
-  METRIC_SET_VALUE(name, static_cast<float>(end_ns - start_ns) * 1e-6f);
-
+  float ms = static_cast<float>(end_ns - start_ns) * 1e-6f;
   clReleaseEvent(event);
+  return ms;
 }
 
-void LBVH::record_kernel_time(const std::vector<cl_event> &events,
-                              const char *name) const {
+float LBVH::record_kernel_time(const std::vector<cl_event> &events) const {
   if (events.empty())
-    return;
+    return 0.0f;
 
   cl_ulong total_ns = 0;
   for (cl_event event : events) {
@@ -373,12 +400,10 @@ void LBVH::record_kernel_time(const std::vector<cl_event> &events,
     total_ns += end_ns - start_ns;
     clReleaseEvent(event);
   }
-
-  // Total device time for this kernel summed over all radix passes, in ms.
-  METRIC_SET_VALUE(name, static_cast<float>(total_ns) * 1e-6f);
+  return static_cast<float>(total_ns) * 1e-6f;
 }
 
-void LBVH::init_opencl() {
+void LBVH::init_device() {
   cl_int err;
   err = clGetPlatformIDs(1, &platform, nullptr);
   check_cl_error(err, "clGetPlatformIDs");
@@ -389,7 +414,10 @@ void LBVH::init_opencl() {
   queue =
       clCreateCommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE, &err);
   check_cl_error(err, "clCreateCommandQueue");
+}
 
+void LBVH::build_program_and_kernels() {
+  cl_int err;
   std::string source = load_kernel_source_with_includes(
       {"src/bvh/opencl_shared_types.cl",
        "src/bvh/lbvh_construction_kernels.cl"});
