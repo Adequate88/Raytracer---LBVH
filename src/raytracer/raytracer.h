@@ -26,6 +26,15 @@ public:
   VkDescriptorSet _wavefrontFinalizeDescriptorSet;
   VkDescriptorPool _wavefrontDescriptorPool;
 
+  VkPipelineLayout _wavefrontGenerateLayout;
+  VkPipelineLayout _wavefrontExtendLayout;
+  VkPipelineLayout _wavefrontShadeLayout;
+  VkPipelineLayout _wavefrontFinalizeLayout;
+  VkPipeline _wavefrontGeneratePipeline;
+  VkPipeline _wavefrontExtendPipeline;
+  VkPipeline _wavefrontShadePipeline;
+  VkPipeline _wavefrontFinalizePipeline;
+
   VkDeviceMemory _wavefrontRayBuffersMemory[2];
   VkDeviceMemory _wavefrontPathStateBuffersMemory[2];
   VkDeviceMemory _wavefrontHitRecordBufferMemory;
