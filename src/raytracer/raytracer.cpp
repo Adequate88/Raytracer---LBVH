@@ -1073,7 +1073,7 @@ void Raytracer::createWavefrontPipelines() {
   VkComputePipelineCreateInfo dispatchPipelineInfo{
       .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
       .stage = dispatchShaderStageInfo,
-      .layout = _wavefrontShadeLayout,
+      .layout = _wavefrontDispatchLayout,
   };
 
   VK_CHECK(vkCreateComputePipelines(_engine._device, VK_NULL_HANDLE, 1,
@@ -1211,7 +1211,22 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
             256,
         1, 1);
 
-    // Memory barrier between shade 1 and extend 2
+    // Memory barrier between shade 1 and dispatch 1 
+    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
+        &_wavefrontMemoryDependency);
+
+    // Dispatch 1 
+    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
+        VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontDispatchPipeline);
+
+    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        _wavefrontDispatchLayout, 0, 1,
+        &_wavefrontDispatchDescriptorSet, 0, nullptr);
+
+    vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
+
+    // Memory barrier between dispatch 1 and extend 2
     vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
                           &_wavefrontMemoryDependency);
 
@@ -1254,6 +1269,21 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
          255) /
             256,
         1, 1);
+
+    // Memory barrier between shade 2 and dispatch 2 
+    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
+        &_wavefrontMemoryDependency);
+
+    // Dispatch 2 
+    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
+        VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontDispatchPipeline);
+
+    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
+        VK_PIPELINE_BIND_POINT_COMPUTE,
+        _wavefrontDispatchLayout, 0, 1,
+        &_wavefrontDispatchDescriptorSet, 0, nullptr);
+
+    vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
   }
 
   // Memory barrier between shade and finalize
