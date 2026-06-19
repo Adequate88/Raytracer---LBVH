@@ -338,6 +338,12 @@ void Raytracer::createWavefrontBuffers() {
                           VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                               VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+
+  _engine.allocate_buffer(
+      _wavefrontDispatchBuffer, _wavefrontDispatchBufferMemory,
+      sizeof(uint32_t) * 3, 
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 }
 
 void Raytracer::createWavefrontDescriptors() {

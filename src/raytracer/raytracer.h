@@ -20,19 +20,23 @@ public:
   VkDescriptorSetLayout _wavefrontExtendDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontShadeDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontFinalizeDescriptorSetLayout;
+  VkDescriptorSetLayout _wavefrontDispatchDescriptorSetLayout;
   VkDescriptorSet _wavefrontGenerateDescriptorSet;
   VkDescriptorSet _wavefrontExtendDescriptorSets[2];
   VkDescriptorSet _wavefrontShadeDescriptorSets[2];
+  VkDescriptorSet _wavefrontDispatchDescriptorSet;
   VkDescriptorSet _wavefrontFinalizeDescriptorSet;
   VkDescriptorPool _wavefrontDescriptorPool;
 
   VkPipelineLayout _wavefrontGenerateLayout;
   VkPipelineLayout _wavefrontExtendLayout;
   VkPipelineLayout _wavefrontShadeLayout;
+  VkPipelineLayout _wavefrontDispatchLayout;
   VkPipelineLayout _wavefrontFinalizeLayout;
   VkPipeline _wavefrontGeneratePipeline;
   VkPipeline _wavefrontExtendPipeline;
   VkPipeline _wavefrontShadePipeline;
+  VkPipeline _wavefrontDispatchPipeline;
   VkPipeline _wavefrontFinalizePipeline;
 
   VkDeviceMemory _wavefrontRayBuffersMemory[2];
@@ -40,6 +44,7 @@ public:
   VkDeviceMemory _wavefrontHitRecordBufferMemory;
   VkDeviceMemory _wavefrontFinalRadianceBufferMemory;
   VkDeviceMemory _wavefrontNextRayCountBufferMemory;
+  VkDeviceMemory _wavefrontDispatchBufferMemory;
 
   VkMemoryBarrier2 _wavefrontMemoryBarrier;
   VkDependencyInfo _wavefrontMemoryDependency;
@@ -69,6 +74,7 @@ private:
   VkBuffer _wavefrontHitRecordBuffer;
   VkBuffer _wavefrontFinalRadianceBuffer;
   VkBuffer _wavefrontNextRayCountBuffer;
+  VkBuffer _wavefrontDispatchBuffer;
   // End of wavefront variables
 
   VkQueryPool _timestampPool;
