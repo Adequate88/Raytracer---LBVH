@@ -342,7 +342,7 @@ void Raytracer::createWavefrontBuffers() {
   _engine.allocate_buffer(
       _wavefrontDispatchBuffer, _wavefrontDispatchBufferMemory,
       sizeof(uint32_t) * 3, 
-      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 }
 
@@ -1122,9 +1122,11 @@ void Raytracer::createWavefrontMemoryBarrier() {
       .srcAccessMask =
           VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
       .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
-                      VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+                      VK_PIPELINE_STAGE_2_TRANSFER_BIT | 
+                      VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
       .dstAccessMask =
-          VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT};
+          VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT |
+          VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT };
 
   _wavefrontMemoryDependency = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
                                 .memoryBarrierCount = 1,
@@ -1163,6 +1165,24 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
                   _wavefrontFinalRadianceBuffer, 0, VK_WHOLE_SIZE, 0);
+
+  // Fill correct value into dispatch buffer for first extend
+  vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
+                  _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 
+                  _engine._windowExtent.width * _engine._windowExtent.height * 10); // Samples = 10
+
+  vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
+      &_wavefrontMemoryDependency);
+
+  vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
+      VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontDispatchPipeline);
+
+  vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
+      VK_PIPELINE_BIND_POINT_COMPUTE,
+      _wavefrontDispatchLayout, 0, 1,
+      &_wavefrontDispatchDescriptorSet, 0, nullptr);
+
+  vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
 
   // Extend and Shade loop
   // MAX BOUNCES = 10
