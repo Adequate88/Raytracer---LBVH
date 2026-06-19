@@ -1051,6 +1051,37 @@ void Raytracer::createWavefrontPipelines() {
 
   vkDestroyShaderModule(_engine._device, shadeShader, nullptr);
 
+  // Dispatch
+  VkPipelineLayoutCreateInfo dispatchLayoutInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+      .setLayoutCount = 1,
+      .pSetLayouts = &_wavefrontDispatchDescriptorSetLayout,
+      .pushConstantRangeCount = 0,
+      .pPushConstantRanges = VK_NULL_HANDLE };
+
+  VK_CHECK(vkCreatePipelineLayout(_engine._device, &dispatchLayoutInfo, nullptr,
+      &_wavefrontDispatchLayout));
+
+  VkShaderModule dispatchShader =
+      load_shader("shaders/wavefront_dispatch.spv", _engine._device);
+
+  VkPipelineShaderStageCreateInfo dispatchShaderStageInfo{
+      .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+      .stage = VK_SHADER_STAGE_COMPUTE_BIT,
+      .module = dispatchShader,
+      .pName = "main" };
+  VkComputePipelineCreateInfo dispatchPipelineInfo{
+      .sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+      .stage = dispatchShaderStageInfo,
+      .layout = _wavefrontShadeLayout,
+  };
+
+  VK_CHECK(vkCreateComputePipelines(_engine._device, VK_NULL_HANDLE, 1,
+      &dispatchPipelineInfo, nullptr,
+      &_wavefrontDispatchPipeline));
+
+  vkDestroyShaderModule(_engine._device, dispatchShader, nullptr);
+
   // Finalize
   VkPipelineLayoutCreateInfo finalizeLayoutInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
