@@ -12,13 +12,14 @@
 Bvh::Bvh(VulkanEngine &engine, size_t primitiveCount)
     : _engine(engine), _primitiveCount(primitiveCount) {}
 
-void Bvh::init(VkBuffer &primBuffer) {
+void Bvh::init(const void *data, size_t size) {
   groups = (_primitiveCount + 1023) / 1024;
   histogramElems = 16 * groups * 256;
   numBlocks = histogramElems / 512;
 
+  createSceneBuffer(data, size);
   createBvhBuffers();
-  createDescriptor(primBuffer);
+  createDescriptor();
   createPipelines();
 }
 
@@ -168,6 +169,40 @@ void Bvh::build() {
   vkDestroyCommandPool(DEVICE, buildPool, nullptr);
 }
 
+void Bvh::createSceneBuffer(const void *data, size_t size) {
+  VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+                                .size = size,
+                                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
+
+  VK_CHECK(vkCreateBuffer(_engine._device, &bufferInfo, nullptr,
+                          &sceneBuffer.buffer));
+
+  VkMemoryRequirements memRequirements;
+  vkGetBufferMemoryRequirements(_engine._device, sceneBuffer.buffer,
+                                &memRequirements);
+
+  uint32_t mem_index =
+      find_memory_type(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                       memRequirements.memoryTypeBits);
+
+  VkMemoryAllocateInfo allocInfo{.sType =
+                                     VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                                 .allocationSize = memRequirements.size,
+                                 .memoryTypeIndex = mem_index};
+  VK_CHECK(vkAllocateMemory(_engine._device, &allocInfo, nullptr,
+                            &sceneBuffer.memory));
+  VK_CHECK(vkBindBufferMemory(_engine._device, sceneBuffer.buffer,
+                              sceneBuffer.memory, 0));
+
+  void *mapped;
+  VK_CHECK(
+      vkMapMemory(_engine._device, sceneBuffer.memory, 0, size, {}, &mapped));
+  memcpy(mapped, data, size);
+  vkUnmapMemory(_engine._device, sceneBuffer.memory);
+}
+
 void Bvh::createBvhBuffers() { // XXX: Currently doing 1:1 buffer/deviceMemory.
                                // Change later if needed
 
@@ -231,7 +266,7 @@ void Bvh::createBvhBuffers() { // XXX: Currently doing 1:1 buffer/deviceMemory.
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, outputPrimIndicesBuffer.memory);
 }
 
-void Bvh::createDescriptor(VkBuffer &primBuffer) {
+void Bvh::createDescriptor() {
 
   uint32_t bindingCount = 11; // XXX : BUFFER COUNT HARDCODED TO 11
 
@@ -282,7 +317,7 @@ void Bvh::createDescriptor(VkBuffer &primBuffer) {
       bindingCount,
       VkDescriptorBufferInfo{.offset = 0, .range = VK_WHOLE_SIZE});
 
-  bufferInfos[0].buffer = primBuffer;
+  bufferInfos[0].buffer = sceneBuffer.buffer;
   bufferInfos[1].buffer = bvhBuffer.buffer;
   bufferInfos[2].buffer = primBboxBuffer.buffer;
   bufferInfos[3].buffer = mortonCodesBuffer.buffer;

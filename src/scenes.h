@@ -1,3 +1,5 @@
+#pragma once
+
 #include "camera.h"
 #include "hittable_list.h"
 #include "mesh.h"

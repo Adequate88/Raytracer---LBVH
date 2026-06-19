@@ -2,6 +2,7 @@
 #include "lbvh_gpu.h"
 #include "metrics_macros.h"
 #include "raytracer.h"
+#include "scene_generator.h"
 #include "scenes.h"
 #include "triangle.h"
 #include "types.h"
@@ -18,28 +19,30 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  //auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  // auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  // LBVH bvh_tree(config.world.objects);
-  //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
-  //  engine.write_image(config.cam.img.data, config.cam.img.width,
-  //  config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
+  int triangle_target = 8000;
+  // auto config =
+  //     load_sphere(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES, triangle_target);
+  //  LBVH bvh_tree(config.world.objects);
+  //   config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
+  //   engine.write_image(config.cam.img.data, config.cam.img.width,
+  //   config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
   //
 
   config.cam.initialize();
-
-  raytracer.initRaytracer(config.world.data(),
-                          config.world.size() * sizeof(triangle_new),
-                          &config.cam.gpu_constants);
 
   Bvh bvh(engine, config.world.size());
 
   METRIC_START_TIME("Total BVH Construction Time");
   METRIC_START_TIME("BVH Initialization");
-  bvh.init(raytracer.sceneBuffer());
+  bvh.init(config.world.data(), config.world.size() * sizeof(triangle_new));
   METRIC_END_TIME("BVH Initialization");
   bvh.build();
   METRIC_END_TIME("Total BVH Construction Time");
+
+  raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),
+                          bvh.bvhBufferHandle());
 
   METRIC_BENCHMARK(100, 10, bvh.build());
 
@@ -53,6 +56,7 @@ int main() {
   METRIC_BENCHMARK(15, 3, {
     while (SDL_PollEvent(&e) != 0) {
     }
+    raytracer.forceRerender();
     uint32_t idx = engine.begin_frame();
     raytracer.recordBuffer(idx);
     engine.end_frame(idx);
@@ -83,7 +87,7 @@ int main() {
                        METRIC_READ("Total Rendering Time"));
 #endif
 
-  METRIC_EXPORT("data/raytracer_no_accel_traversal.csv");
+  METRIC_EXPORT("data/raytracer_with_accel_traversal.csv");
 
   return 0;
 }

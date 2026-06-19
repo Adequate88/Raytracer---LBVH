@@ -1,10 +1,10 @@
 #version 460
-
-#include "triangle.glsl"
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_traversal.glsl"
 
 const float PI = 3.14159;
-const int MAX_BOUNCES = 10;
-const int SAMPLES = 10;
+const int MAX_BOUNCES = 1;
+const int SAMPLES = 1;
 
 // From: https://stackoverflow.com/questions/9912143/how-to-get-a-random-number-in-opencl
 //noise values in range if 0.0 to 1.0
@@ -19,9 +19,6 @@ layout(push_constant) uniform Camera {
   vec4 pixel_delta_u;
   vec4 pixel_delta_v;
 } cam;
-layout(binding = 1, std430) readonly buffer SceneBuffer {
-  triangle triangles[];
-} scene;
 
 layout(binding = 0, rgba8) uniform writeonly image2D img;
 
@@ -56,16 +53,8 @@ void main() {
         hit_record rec;
         rec.t = 1e30;
 
-        for (int j = 0; j < scene.triangles.length(); j++) {
-          hit_record temp_rec;
-          if (intersect_triangle(ray_origin, ray_dir, rec.t, 
-                                 scene.triangles[j], temp_rec)) {
-            rec = temp_rec;
-          }
-        }
-
         // Break if no hit
-        if (rec.t >= 1e30) {
+        if (!bvh_hit(ray_origin, ray_dir, rec)) {
           sample_energy += throughput * background_color;
           break;
         }

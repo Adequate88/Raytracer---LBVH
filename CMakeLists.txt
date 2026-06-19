@@ -39,17 +39,22 @@ file(GLOB_RECURSE GLSL_SOURCE_FILES
     "${PROJECT_SOURCE_DIR}/shaders/*.comp"
     )
 
+
+file(GLOB_RECURSE GLSL_INCLUDE_FILES "${PROJECT_SOURCE_DIR}/shaders/*.glsl")
+
 foreach(GLSL ${GLSL_SOURCE_FILES})
   message("Starting to build shaders")
-  get_filename_component(FILENAME ${GLSL} NAME)
+  get_filename_component(FILENAME ${GLSL} NAME_WE)
   set(SPIRV "${PROJECT_SOURCE_DIR}/shaders/${FILENAME}.spv")
   add_custom_command(
     OUTPUT ${SPIRV}
-    COMMAND ${GLSL_VALIDATOR} -V ${GLSL} -o ${SPIRV}
-    DEPENDS ${GLSL})
+    COMMAND ${GLSL_VALIDATOR} -V -I${PROJECT_SOURCE_DIR}/shaders ${GLSL} -o ${SPIRV}
+    DEPENDS ${GLSL} ${GLSL_INCLUDE_FILES})
   list (APPEND SPIRV_BINARY_FILES ${SPIRV})
 endforeach(GLSL)
 
 add_custom_target(Shaders DEPENDS ${SPIRV_BINARY_FILES})
+
+add_dependencies(engine Shaders)
 
 

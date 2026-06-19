@@ -19,11 +19,13 @@ public:
   VkDeviceMemory _renderTargetMemory;
   VkDeviceMemory _sceneMemory;
 
-  void initRaytracer(const void *data, size_t size, const void *cameraData);
+  // The scene (primitive) and BVH node buffers are owned by the Bvh and passed
+  // in here so the descriptor set can bind them. Build the BVH before calling.
+  void initRaytracer(const void *cameraData, VkBuffer sceneBuffer,
+                     VkBuffer bvhBuffer);
   void recordBuffer(uint32_t image_index);
   void recordRenderTime();
-
-  VkBuffer &sceneBuffer() { return _sceneBuffer; }
+  void forceRerender() { _rendered = false; }
 
 private:
   VulkanEngine &_engine;
@@ -33,13 +35,16 @@ private:
   VkImageView _renderTargetView;
 
   VkBuffer _sceneBuffer;
+  VkBuffer _BvhBuffer;
 
   VkQueryPool _timestampPool;
+
+  bool _rendered = false;
 
   void createTimestampPool();
   void createRenderTarget();
   void createDescriptors();
-  void createSceneBuffer(const void *data, size_t size);
+
   void createShaderModule();
   void createPipeline();
 };
