@@ -463,6 +463,29 @@ void Raytracer::createWavefrontDescriptors() {
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &shadeSetInfo, nullptr,
                                        &_wavefrontShadeDescriptorSetLayout));
 
+  // Dispatch
+  VkDescriptorSetLayoutBinding nextRayCountDispatchBinding{
+      .binding = 0,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
+
+  VkDescriptorSetLayoutBinding dispatchSizeDispatchBinding{
+      .binding = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
+
+  VkDescriptorSetLayoutBinding layoutDispatchBindings[2] = {
+      nextRayCountDispatchBinding, dispatchSizeDispatchBinding};
+
+  VkDescriptorSetLayoutCreateInfo dispatchSetInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+      .bindingCount = 2,
+      .pBindings = layoutDispatchBindings };
+  VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &dispatchSetInfo, nullptr,
+      &_wavefrontDispatchDescriptorSetLayout));
+
   // Finalize
   VkDescriptorSetLayoutBinding renderFinalizeBinding{
       .binding = 0,
@@ -491,12 +514,12 @@ void Raytracer::createWavefrontDescriptors() {
   VkDescriptorPoolSize renderPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                       .descriptorCount = 2};
   VkDescriptorPoolSize buffersPoolSize{
-      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 23};
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 25};
 
   VkDescriptorPoolSize poolSizes[2] = {renderPoolSize, buffersPoolSize};
   VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-      .maxSets = 6,
+      .maxSets = 7,
       .poolSizeCount = 2,
       .pPoolSizes = poolSizes};
 
@@ -540,6 +563,16 @@ void Raytracer::createWavefrontDescriptors() {
 
   VK_CHECK(vkAllocateDescriptorSets(_engine._device, &shadeDescriptorAllocInfo,
                                     &_wavefrontShadeDescriptorSets[1]));
+
+  // Dispatch
+  VkDescriptorSetAllocateInfo dispatchDescriptorAllocInfo{
+      .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+      .descriptorPool = _wavefrontDescriptorPool,
+      .descriptorSetCount = 1,
+      .pSetLayouts = &_wavefrontDispatchDescriptorSetLayout };
+
+  VK_CHECK(vkAllocateDescriptorSets(_engine._device, &dispatchDescriptorAllocInfo,
+      &_wavefrontDispatchDescriptorSet));
 
   // Finalize
   VkDescriptorSetAllocateInfo finalizeDescriptorAllocInfo{
@@ -859,6 +892,35 @@ void Raytracer::createWavefrontDescriptors() {
       writeShadePathStatesOut1, writeShadeFinalRadiance1,
       writeShadeNextRayCount1};
   vkUpdateDescriptorSets(_engine._device, 7, writeShadeSets1, 0, nullptr);
+
+  // Dispatch
+  VkDescriptorBufferInfo descriptorDispatchNextRayCountBufferInfo{
+      _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE };
+
+  VkWriteDescriptorSet writeDispatchNextRayCount{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontDispatchDescriptorSet,
+      .dstBinding = 0,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorDispatchNextRayCountBufferInfo };
+
+  VkDescriptorBufferInfo descriptorDispatchDispatchBufferInfo{
+      _wavefrontDispatchBuffer, 0, VK_WHOLE_SIZE };
+
+  VkWriteDescriptorSet writeDispatchDispatch{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontDispatchDescriptorSet,
+      .dstBinding = 1,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorDispatchDispatchBufferInfo };
+
+  VkWriteDescriptorSet writeDispatchSets[2] = {
+      writeDispatchNextRayCount, writeDispatchDispatch };
+  vkUpdateDescriptorSets(_engine._device, 2, writeDispatchSets, 0, nullptr);
 
   // Finalize
   VkDescriptorImageInfo descriptorFinalizeImageInfo{

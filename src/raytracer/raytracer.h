@@ -19,8 +19,8 @@ public:
   VkDescriptorSetLayout _wavefrontGenerateDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontExtendDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontShadeDescriptorSetLayout;
-  VkDescriptorSetLayout _wavefrontFinalizeDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontDispatchDescriptorSetLayout;
+  VkDescriptorSetLayout _wavefrontFinalizeDescriptorSetLayout;
   VkDescriptorSet _wavefrontGenerateDescriptorSet;
   VkDescriptorSet _wavefrontExtendDescriptorSets[2];
   VkDescriptorSet _wavefrontShadeDescriptorSets[2];
