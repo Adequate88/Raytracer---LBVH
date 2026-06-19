@@ -324,7 +324,7 @@ void Raytracer::createWavefrontBuffers() {
         _wavefrontFinalRadianceBuffer,
         _wavefrontFinalRadianceBufferMemory,
         nrOfPaths * 16, // vec3 + padding from std430
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
 
@@ -959,6 +959,9 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
         (_engine._windowExtent.width + 15) / 16,
         (_engine._windowExtent.height + 15) / 16, 1);
+
+    vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index], 
+        _wavefrontFinalRadianceBuffer, 0, VK_WHOLE_SIZE, 0);
 
     // Extend and Shade loop
     // MAX BOUNCES = 10
