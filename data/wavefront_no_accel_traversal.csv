@@ -1,0 +1,13 @@
+BVH Initialization,0.362305
+Bounding Box Kernel,0.0162788,0.000286389
+Hierarchy Creation Kernel,0.0119216,0.000146933
+Morton Code Kernel,0.003166,0.000285876
+Primitive+World BBox Kernel,0.027662,0.00145804
+Radix Sort Kernel,0.0910816,0.00063691
+Ray Count,7.2e+06
+Rays traced per second,4.3289e+07,765677
+Total BVH Construction Time,0.873047
+Total BVH Kernel Time,0.15011,0.00166129
+Total Rendering Time,166.372,2.93122
+Total Run Time,186.509
+Vulkan Device Init,19.2639

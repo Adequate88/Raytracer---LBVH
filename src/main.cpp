@@ -18,7 +18,7 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  //auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  // auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   // LBVH bvh_tree(config.world.objects);
   //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
@@ -69,7 +69,7 @@ int main() {
         bQuit = true;
     }
     uint32_t idx = engine.begin_frame();
-    //raytracer.recordBuffer(idx);
+    // raytracer.recordBuffer(idx);
     raytracer.recordWavefrontBuffer(idx);
     engine.end_frame(idx);
   }
@@ -84,7 +84,7 @@ int main() {
                        METRIC_READ("Total Rendering Time"));
 #endif
 
-  METRIC_EXPORT("data/raytracer_no_accel_traversal.csv");
+  METRIC_EXPORT("data/wavefront_no_accel_traversal.csv");
 
   return 0;
 }
