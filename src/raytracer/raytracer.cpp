@@ -16,6 +16,12 @@ void Raytracer::initRaytracer(const void *data, size_t size,
   createSceneBuffer(data, size);
   createDescriptors();
   createPipeline();
+
+  // Wavefront
+  createWavefrontBuffers();
+  createWavefrontDescriptors();
+  createWavefrontPipelines();
+  createWavefrontMemoryBarrier();
 }
 
 void Raytracer::createRenderTarget() {
@@ -270,20 +276,20 @@ void Raytracer::recordBuffer(
 // Wavefront
 void Raytracer::createWavefrontBuffers() {
     // SAMPLES = 10
-    const VkDeviceSize nrOfPaths = IMAGE_WIDTH * IMAGE_HEIGHT * 10;
+    const VkDeviceSize nrOfPaths = _engine._windowExtent.width * _engine._windowExtent.height * 10;
 
     // Ray buffers
     _engine.allocate_buffer(
         _wavefrontRayBuffers[0],
         _wavefrontRayBuffersMemory[0],
-        nrOfPaths * 24, // Based on ray.glsl
+        nrOfPaths * 32, // Based on ray.glsl
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
     _engine.allocate_buffer(
         _wavefrontRayBuffers[1],
         _wavefrontRayBuffersMemory[1],
-        nrOfPaths * 24, // Based on ray.glsl
+        nrOfPaths * 32, // Based on ray.glsl
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
@@ -292,14 +298,14 @@ void Raytracer::createWavefrontBuffers() {
     _engine.allocate_buffer(
         _wavefrontPathStateBuffers[0],
         _wavefrontPathStateBuffersMemory[0],
-        nrOfPaths * 32, // Based on path_state.glsl
+        nrOfPaths * 48, // Based on path_state.glsl
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
     _engine.allocate_buffer(
         _wavefrontPathStateBuffers[1],
         _wavefrontPathStateBuffersMemory[1],
-        nrOfPaths * 32, // Based on path_state.glsl
+        nrOfPaths * 48, // Based on path_state.glsl
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
@@ -308,7 +314,7 @@ void Raytracer::createWavefrontBuffers() {
     _engine.allocate_buffer(
         _wavefrontHitRecordBuffer,
         _wavefrontHitRecordBufferMemory,
-        nrOfPaths * 44, // Based on triangle.glsl
+        nrOfPaths * 64, // Based on triangle.glsl
         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
@@ -327,7 +333,7 @@ void Raytracer::createWavefrontBuffers() {
         _wavefrontNextRayCountBuffer,
         _wavefrontNextRayCountBufferMemory,
         sizeof(uint32_t), 
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT
     );
 }
@@ -912,13 +918,13 @@ void Raytracer::createWavefrontPipelines() {
     vkDestroyShaderModule(_engine._device, finalizeShader, nullptr);
 }
 
-void Raytracer::createMemoryBarrier() {
+void Raytracer::createWavefrontMemoryBarrier() {
     _wavefrontMemoryBarrier = {
             .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-            .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT };
+            .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_2_SHADER_WRITE_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT | VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT | VK_ACCESS_2_TRANSFER_WRITE_BIT };
 
     _wavefrontMemoryDependency = {
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -972,6 +978,10 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
             (_engine._windowExtent.width * _engine._windowExtent.height * 10 + 255) / 256,
             1, 1);
 
+        // Reset ray count
+        vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
+            _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 0);
+
         // Memory barrier between extend 1 and shade 1 
         vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index], &_wavefrontMemoryDependency);
     
@@ -1001,6 +1011,10 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
         vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
             (_engine._windowExtent.width * _engine._windowExtent.height * 10 + 255) / 256,
             1, 1);
+
+        // Reset ray count
+        vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
+            _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 0);
 
         // Memory barrier between extend 1 and shade 1 
         vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index], &_wavefrontMemoryDependency);

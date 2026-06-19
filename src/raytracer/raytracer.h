@@ -78,5 +78,5 @@ private:
   void createWavefrontBuffers();
   void createWavefrontDescriptors();
   void createWavefrontPipelines();
-  void createMemoryBarrier();
+  void createWavefrontMemoryBarrier();
 };

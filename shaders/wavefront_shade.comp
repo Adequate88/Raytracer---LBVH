@@ -83,6 +83,7 @@ void main() {
     vec3 new_ray_dir = normalize(rec.normal + rand_unit_vec);
 
     uint out_idx = atomicAdd(next_ray_count.count, 1);
+    //uint out_idx = 0;
 
     ray_out.rays[out_idx].origin = rec.p;
     ray_out.rays[out_idx].dir = new_ray_dir;

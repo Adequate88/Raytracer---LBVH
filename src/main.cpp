@@ -38,7 +38,8 @@ int main() {
         bQuit = true;
     }
     uint32_t idx = engine.begin_frame();
-    raytracer.recordBuffer(idx);
+    //raytracer.recordBuffer(idx);
+    raytracer.recordWavefrontBuffer(idx);
     engine.end_frame(idx);
   }
   VK_CHECK(vkDeviceWaitIdle(engine._device));
