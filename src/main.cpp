@@ -82,9 +82,8 @@ int main() {
                    METRIC_READ("Vulkan Device Init") +
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
-#endif
-
   METRIC_EXPORT("data/megakernel_no_accel_traversal.csv");
+#endif
 
   return 0;
 }

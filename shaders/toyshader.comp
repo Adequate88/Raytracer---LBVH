@@ -1,5 +1,5 @@
 #version 460
-
+#extension GL_GOOGLE_include_directive : require
 #include "triangle.glsl"
 
 const float PI = 3.14159;
@@ -58,8 +58,8 @@ void main() {
 
         for (int j = 0; j < scene.triangles.length(); j++) {
           hit_record temp_rec;
-          if (intersect_triangle(ray_origin, ray_dir, rec.t, 
-                                 scene.triangles[j], temp_rec)) {
+          if (intersect_triangle(ray_origin, ray_dir, rec.t,
+              scene.triangles[j], temp_rec)) {
             rec = temp_rec;
           }
         }
