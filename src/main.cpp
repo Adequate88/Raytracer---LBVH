@@ -18,12 +18,13 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  //auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  // auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  // LBVH bvh_tree(config.world.objects);
-  //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
-  //  engine.write_image(config.cam.img.data, config.cam.img.width,
-  //  config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
+  // auto config = load_conference(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //  LBVH bvh_tree(config.world.objects);
+  //   config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
+  //   engine.write_image(config.cam.img.data, config.cam.img.width,
+  //   config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
   //
 
   config.cam.initialize();
@@ -83,7 +84,7 @@ int main() {
                        METRIC_READ("Total Rendering Time"));
 #endif
 
-  METRIC_EXPORT("data/raytracer_no_accel_traversal.csv");
+  METRIC_EXPORT("data/megakernel_no_accel_traversal.csv");
 
   return 0;
 }
