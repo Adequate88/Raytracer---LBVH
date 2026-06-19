@@ -1200,12 +1200,8 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             _wavefrontExtendLayout, 0, 1,
                             &_wavefrontExtendDescriptorSets[0], 0, nullptr);
 
-    vkCmdDispatch(
-        _engine._commandBuffers[_engine.frame_index],
-        (_engine._windowExtent.width * _engine._windowExtent.height * 10 +
-         255) /
-            256,
-        1, 1);
+    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
+        _wavefrontDispatchBuffer, 0);
 
     // Reset ray count
     vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
@@ -1224,12 +1220,8 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             _wavefrontShadeLayout, 0, 1,
                             &_wavefrontShadeDescriptorSets[0], 0, nullptr);
 
-    vkCmdDispatch(
-        _engine._commandBuffers[_engine.frame_index],
-        (_engine._windowExtent.width * _engine._windowExtent.height * 10 +
-         255) /
-            256,
-        1, 1);
+    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
+        _wavefrontDispatchBuffer, 0);
 
     // Memory barrier between shade 1 and dispatch 1 
     vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
@@ -1259,12 +1251,8 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             _wavefrontExtendLayout, 0, 1,
                             &_wavefrontExtendDescriptorSets[1], 0, nullptr);
 
-    vkCmdDispatch(
-        _engine._commandBuffers[_engine.frame_index],
-        (_engine._windowExtent.width * _engine._windowExtent.height * 10 +
-         255) /
-            256,
-        1, 1);
+    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
+        _wavefrontDispatchBuffer, 0);
 
     // Reset ray count
     vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
@@ -1283,12 +1271,8 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             _wavefrontShadeLayout, 0, 1,
                             &_wavefrontShadeDescriptorSets[1], 0, nullptr);
 
-    vkCmdDispatch(
-        _engine._commandBuffers[_engine.frame_index],
-        (_engine._windowExtent.width * _engine._windowExtent.height * 10 +
-         255) /
-            256,
-        1, 1);
+    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
+        _wavefrontDispatchBuffer, 0);
 
     // Memory barrier between shade 2 and dispatch 2 
     vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
