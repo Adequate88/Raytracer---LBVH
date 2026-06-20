@@ -3,7 +3,7 @@
 #include "triangle.glsl"
 
 const float PI = 3.14159;
-const int MAX_BOUNCES = 30;
+const int MAX_BOUNCES = 2;
 const int SAMPLES = 1;
 
 // From: https://stackoverflow.com/questions/9912143/how-to-get-a-random-number-in-opencl

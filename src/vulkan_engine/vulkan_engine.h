@@ -7,8 +7,8 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_raii.hpp>
 
-constexpr uint32_t IMAGE_WIDTH = 128;
-constexpr uint32_t IMAGE_HEIGHT = 128;
+constexpr uint32_t IMAGE_WIDTH = 512;
+constexpr uint32_t IMAGE_HEIGHT = 512;
 
 #include "vulkan_types.h"
 
