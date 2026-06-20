@@ -759,7 +759,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendSets1[4] = {
       writeExtendRays1, writeExtendHitRecords1, 
       writeExtendScene1, writeExtendLastRayCount1 };
-  vkUpdateDescriptorSets(_engine._device, 43, writeExtendSets1, 0, nullptr);
+  vkUpdateDescriptorSets(_engine._device, 4, writeExtendSets1, 0, nullptr);
 
   // Shade 0
   VkDescriptorBufferInfo descriptorShadeRaysInBufferInfo0{
@@ -852,7 +852,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeShadeNextRayCount0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[0],
-      .dstBinding = 6,
+      .dstBinding = 7,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -902,9 +902,6 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeHitRecordBufferInfo1};
 
-  VkDescriptorBufferInfo descriptorShadeRaysOutBufferInfo1{
-      _wavefrontRayBuffers[0], 0, VK_WHOLE_SIZE};
-
   VkDescriptorBufferInfo descriptorShadeLastRayCountBufferInfo1{
       _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE };
 
@@ -916,6 +913,9 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeLastRayCountBufferInfo1 };
+
+  VkDescriptorBufferInfo descriptorShadeRaysOutBufferInfo1{
+      _wavefrontRayBuffers[0], 0, VK_WHOLE_SIZE };
 
   VkWriteDescriptorSet writeShadeRaysOut1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -951,7 +951,7 @@ void Raytracer::createWavefrontDescriptors() {
       .pBufferInfo = &descriptorShadeFinalRadianceBufferInfo1};
 
   VkDescriptorBufferInfo descriptorShadeNextRayCountBufferInfo1{
-      _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE};
+      _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
 
   VkWriteDescriptorSet writeShadeNextRayCount1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -971,7 +971,7 @@ void Raytracer::createWavefrontDescriptors() {
 
   // Dispatch 0
   VkDescriptorBufferInfo descriptorDispatchNextRayCountBufferInfo0{
-      _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
+      _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE};
 
   VkWriteDescriptorSet writeDispatchNextRayCount0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1000,7 +1000,7 @@ void Raytracer::createWavefrontDescriptors() {
 
   // Dispatch 1
   VkDescriptorBufferInfo descriptorDispatchNextRayCountBufferInfo1{
-      _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE};
+      _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
 
   VkWriteDescriptorSet writeDispatchNextRayCount1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1273,7 +1273,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   // Fill correct value into dispatch buffer for first extend
   vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                  _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 
+                  _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE,
                   _engine._windowExtent.width * _engine._windowExtent.height * 10); // Samples = 10
 
   vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
@@ -1285,7 +1285,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
   vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
       VK_PIPELINE_BIND_POINT_COMPUTE,
       _wavefrontDispatchLayout, 0, 1,
-      &_wavefrontDispatchDescriptorSet, 0, nullptr);
+      &_wavefrontDispatchDescriptorSets[1], 0, nullptr);
 
   vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
 
@@ -1310,7 +1310,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
     // Reset ray count
     vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                    _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 0);
+                    _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE, 0);
 
     // Memory barrier between extend 1 and shade 1
     vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
@@ -1339,7 +1339,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
         VK_PIPELINE_BIND_POINT_COMPUTE,
         _wavefrontDispatchLayout, 0, 1,
-        &_wavefrontDispatchDescriptorSet, 0, nullptr);
+        &_wavefrontDispatchDescriptorSets[0], 0, nullptr);
 
     vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
 
@@ -1361,7 +1361,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
     // Reset ray count
     vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                    _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 0);
+                    _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE, 0);
 
     // Memory barrier between extend 1 and shade 1
     vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
@@ -1390,7 +1390,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
         VK_PIPELINE_BIND_POINT_COMPUTE,
         _wavefrontDispatchLayout, 0, 1,
-        &_wavefrontDispatchDescriptorSet, 0, nullptr);
+        &_wavefrontDispatchDescriptorSets[1], 0, nullptr);
 
     vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
   }
