@@ -3,8 +3,8 @@
 #include "triangle.glsl"
 
 const float PI = 3.14159;
-const int MAX_BOUNCES = 50;
-const int SAMPLES = 20;
+const int MAX_BOUNCES = 30;
+const int SAMPLES = 1;
 
 // From: https://stackoverflow.com/questions/9912143/how-to-get-a-random-number-in-opencl
 //noise values in range if 0.0 to 1.0
