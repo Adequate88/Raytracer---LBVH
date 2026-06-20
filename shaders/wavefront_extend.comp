@@ -17,10 +17,14 @@ layout(binding = 2, std430) readonly buffer SceneBuffer {
   triangle triangles[];
 } scene;
 
+layout(binding = 3, std430) readonly buffer LastRayCountBuffer {
+  uint count;
+} last_ray_count;
+
 void main() {
   int thread = int(gl_GlobalInvocationID.x);
 
-  if (thread < ray_in.rays.length()) {
+  if (thread < last_ray_count.count) {
     Ray ray = ray_in.rays[thread];
     hit_record rec;
     rec.t = 1e30;
