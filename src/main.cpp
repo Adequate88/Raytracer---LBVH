@@ -33,16 +33,16 @@ int main() {
                           config.world.size() * sizeof(triangle_new),
                           &config.cam.gpu_constants);
 
-  Bvh bvh(engine, config.world.size());
+  // Bvh bvh(engine, config.world.size());
 
   METRIC_START_TIME("Total BVH Construction Time");
   METRIC_START_TIME("BVH Initialization");
-  bvh.init(raytracer.sceneBuffer());
+  // bvh.init(raytracer.sceneBuffer());
   METRIC_END_TIME("BVH Initialization");
-  bvh.build();
+  // bvh.build();
   METRIC_END_TIME("Total BVH Construction Time");
 
-  METRIC_BENCHMARK(100, 10, bvh.build());
+  // METRIC_BENCHMARK(100, 10, bvh.build());
 
   METRIC_SET_VALUE("Ray Count",
                    static_cast<float>(IMAGE_WIDTH * IMAGE_HEIGHT *
