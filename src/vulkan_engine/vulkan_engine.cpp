@@ -62,24 +62,43 @@ uint32_t VulkanEngine::begin_frame() {
                                  VK_NULL_HANDLE, &imageIndex));
 
   vkResetCommandBuffer(_commandBuffers[frame_index], {});
+  vkResetCommandBuffer(_computeCommandBuffers[frame_index], {});
   return imageIndex;
 }
 
 void VulkanEngine::end_frame(uint32_t imageIndex) {
+  VkCommandBufferSubmitInfo computeBufferInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+      .commandBuffer = _computeCommandBuffers[frame_index],
+      .deviceMask = 0};
+  VkSemaphoreSubmitInfo computeSignalInfo{
+      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+      .semaphore = _computeFinishedSemaphores[frame_index],
+      .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT};
+  VkSubmitInfo2 computeSubmit{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+                              .commandBufferInfoCount = 1,
+                              .pCommandBufferInfos = &computeBufferInfo,
+                              .signalSemaphoreInfoCount = 1,
+                              .pSignalSemaphoreInfos = &computeSignalInfo};
+  VK_CHECK(vkQueueSubmit2(_computeQueue, 1, &computeSubmit, VK_NULL_HANDLE));
+
   VkCommandBufferSubmitInfo bufferInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
       .commandBuffer = _commandBuffers[frame_index],
       .deviceMask = 0};
-  VkSemaphoreSubmitInfo presentSemaphoreInfo{
-      .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-      .semaphore = _presentCompleteSemaphores[frame_index],
-      .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT};
+  VkSemaphoreSubmitInfo waitInfos[2]{
+      {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+       .semaphore = _presentCompleteSemaphores[frame_index],
+       .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT},
+      {.sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+       .semaphore = _computeFinishedSemaphores[frame_index],
+       .stageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT}};
   VkSemaphoreSubmitInfo signalSemaphoreInfo{
       .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
       .semaphore = _renderFinishedSemaphores[imageIndex]};
   VkSubmitInfo2 submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-                           .waitSemaphoreInfoCount = 1,
-                           .pWaitSemaphoreInfos = &presentSemaphoreInfo,
+                           .waitSemaphoreInfoCount = 2,
+                           .pWaitSemaphoreInfos = waitInfos,
                            .commandBufferInfoCount = 1,
                            .pCommandBufferInfos = &bufferInfo,
                            .signalSemaphoreInfoCount = 1,
@@ -263,13 +282,34 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
     }
   }
 
+  // Dedicated compute family (compute ring → 60s watchdog vs gfx's 10s)
+  bool hasDedicatedCompute = false;
+  for (uint32_t queueInd = 0; queueInd < familyProperties.size(); queueInd++) {
+    VkQueueFlags flags = familyProperties[queueInd].queueFlags;
+    if ((flags & VK_QUEUE_COMPUTE_BIT) && !(flags & VK_QUEUE_GRAPHICS_BIT)) {
+      _computeQueueFamilyIndex = queueInd;
+      hasDedicatedCompute = true;
+      break;
+    }
+  }
+  if (!hasDedicatedCompute)
+    _computeQueueFamilyIndex = _queueFamilyIndex;
+
   float queuePriority = 0.5f;
-  VkDeviceQueueCreateInfo queueInfo{
+  std::vector<VkDeviceQueueCreateInfo> queueInfos;
+  queueInfos.push_back(VkDeviceQueueCreateInfo{
       .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
       .pNext = nullptr,
       .queueFamilyIndex = _queueFamilyIndex,
       .queueCount = 1,
-      .pQueuePriorities = &queuePriority};
+      .pQueuePriorities = &queuePriority});
+  if (hasDedicatedCompute)
+    queueInfos.push_back(VkDeviceQueueCreateInfo{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+        .pNext = nullptr,
+        .queueFamilyIndex = _computeQueueFamilyIndex,
+        .queueCount = 1,
+        .pQueuePriorities = &queuePriority});
 
   // Logical device
 
@@ -290,8 +330,8 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
   VkDeviceCreateInfo deviceInfo{
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
       .pNext = &deviceFeatures,
-      .queueCreateInfoCount = 1,
-      .pQueueCreateInfos = &queueInfo,
+      .queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size()),
+      .pQueueCreateInfos = queueInfos.data(),
       .enabledExtensionCount =
           static_cast<uint32_t>(requiredDeviceExtensions.size()),
       .ppEnabledExtensionNames = requiredDeviceExtensions.data(),
@@ -299,6 +339,11 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
 
   VK_CHECK(vkCreateDevice(_gpu, &deviceInfo, nullptr, &_device));
   vkGetDeviceQueue(_device, _queueFamilyIndex, 0, &_graphicsQueue);
+  vkGetDeviceQueue(_device, _computeQueueFamilyIndex, 0, &_computeQueue);
+
+  fmt::print("Graphics queue family: {}, Compute queue family: {} ({})\n",
+             _queueFamilyIndex, _computeQueueFamilyIndex,
+             hasDedicatedCompute ? "dedicated" : "fallback=graphics");
 }
 
 void VulkanEngine::init_swapchain() {
@@ -429,6 +474,23 @@ void VulkanEngine::init_commands() {
       .commandBufferCount = MAX_FRAMES_IN_FLIGHT};
   VK_CHECK(
       vkAllocateCommandBuffers(_device, &bufferInfo, _commandBuffers.data()));
+
+  VkCommandPoolCreateInfo computePoolInfo{
+      .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+      .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+      .queueFamilyIndex = _computeQueueFamilyIndex};
+  VK_CHECK(vkCreateCommandPool(_device, &computePoolInfo, nullptr,
+                               &_computeCommandPool));
+
+  _computeCommandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+  VkCommandBufferAllocateInfo computeBufferInfo = {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+      .commandPool = _computeCommandPool,
+      .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      .commandBufferCount = MAX_FRAMES_IN_FLIGHT};
+  VK_CHECK(vkAllocateCommandBuffers(_device, &computeBufferInfo,
+                                    _computeCommandBuffers.data()));
 }
 
 void VulkanEngine::record_buffer(uint32_t image_index) { // record buffer for
@@ -490,6 +552,16 @@ void VulkanEngine::transition_image_layout(
     VkAccessFlags2 src_access_flags, VkAccessFlags2 dst_access_flags,
     VkPipelineStageFlags2 src_stage_flags,
     VkPipelineStageFlags2 dst_stage_flags) {
+  transition_image_layout(_commandBuffers[frame_index], image, old_layout,
+                          new_layout, src_access_flags, dst_access_flags,
+                          src_stage_flags, dst_stage_flags);
+}
+
+void VulkanEngine::transition_image_layout(
+    VkCommandBuffer cmd, VkImage image, VkImageLayout old_layout,
+    VkImageLayout new_layout, VkAccessFlags2 src_access_flags,
+    VkAccessFlags2 dst_access_flags, VkPipelineStageFlags2 src_stage_flags,
+    VkPipelineStageFlags2 dst_stage_flags) {
 
   VkImageMemoryBarrier2 barrier{
       .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -511,13 +583,14 @@ void VulkanEngine::transition_image_layout(
                                   .dependencyFlags = {},
                                   .imageMemoryBarrierCount = 1,
                                   .pImageMemoryBarriers = &barrier};
-  vkCmdPipelineBarrier2(_commandBuffers[frame_index], &dependencyInfo);
+  vkCmdPipelineBarrier2(cmd, &dependencyInfo);
 }
 
 void VulkanEngine::create_sync_objects() {
 
   _presentCompleteSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
   _renderFinishedSemaphores.resize(_swapchainImages.size());
+  _computeFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
   _inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
 
   assert(!_presentCompleteSemaphores.empty() &&
@@ -530,6 +603,8 @@ void VulkanEngine::create_sync_objects() {
   for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
     VK_CHECK(vkCreateSemaphore(_device, &presentSemaphoreInfo, nullptr,
                                &_presentCompleteSemaphores[i]));
+    VK_CHECK(vkCreateSemaphore(_device, &presentSemaphoreInfo, nullptr,
+                               &_computeFinishedSemaphores[i]));
 
     VK_CHECK(vkCreateFence(_device, &drawInfo, nullptr, &_inFlightFences[i]));
   }

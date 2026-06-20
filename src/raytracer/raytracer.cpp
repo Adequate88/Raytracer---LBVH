@@ -31,6 +31,11 @@ void Raytracer::createTimestampPool() {
 }
 
 void Raytracer::createRenderTarget() {
+  uint32_t queueFamilies[2] = {_engine._queueFamilyIndex,
+                               _engine._computeQueueFamilyIndex};
+  bool concurrent =
+      _engine._queueFamilyIndex != _engine._computeQueueFamilyIndex;
+
   VkImageCreateInfo imgInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .imageType = VK_IMAGE_TYPE_2D,
@@ -41,7 +46,10 @@ void Raytracer::createRenderTarget() {
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
       .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .sharingMode =
+          concurrent ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+      .queueFamilyIndexCount = concurrent ? 2u : 0u,
+      .pQueueFamilyIndices = concurrent ? queueFamilies : nullptr,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
 
   VK_CHECK(vkCreateImage(_engine._device, &imgInfo, nullptr, &_renderTarget));
@@ -206,56 +214,58 @@ void Raytracer::createPipeline() {
 }
 
 void Raytracer::recordBuffer(uint32_t image_index) {
+  VkCommandBuffer computeCmd =
+      _engine._computeCommandBuffers[_engine.frame_index];
+  VkCommandBuffer graphicsCmd = _engine._commandBuffers[_engine.frame_index];
+
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 
-  VK_CHECK(vkBeginCommandBuffer(_engine._commandBuffers[_engine.frame_index],
-                                &beginInfo));
+  // Compute submission: the raytrace dispatch (runs on the 60s compute ring)
+  VK_CHECK(vkBeginCommandBuffer(computeCmd, &beginInfo));
 
   if (!_rendered) {
-    vkCmdResetQueryPool(_engine._commandBuffers[_engine.frame_index],
-                        _timestampPool, 0, 2);
+    vkCmdResetQueryPool(computeCmd, _timestampPool, 0, 2);
 
-    vkCmdPushConstants(_engine._commandBuffers[_engine.frame_index], _layout,
-                       VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
-                       _cameraConstants); // TODO ALSO HARDCODE 64 bytes here
+    vkCmdPushConstants(computeCmd, _layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
+                       _cameraConstants);
 
     _engine.transition_image_layout(
-        _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, {},
-        VK_ACCESS_2_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+        computeCmd, _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_GENERAL, {}, VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                      VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                            VK_PIPELINE_BIND_POINT_COMPUTE, _layout, 0, 1,
-                            &_descriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE, _layout,
+                            0, 1, &_descriptorSet, 0, nullptr);
 
-    vkCmdWriteTimestamp2(_engine._commandBuffers[_engine.frame_index],
-                         VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, _timestampPool, 0);
+    vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                         _timestampPool, 0);
 
-    vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
-                  (_engine._windowExtent.width + 15) / 16,
+    vkCmdDispatch(computeCmd, (_engine._windowExtent.width + 15) / 16,
                   (_engine._windowExtent.height + 15) / 16, 1);
 
-    vkCmdWriteTimestamp2(_engine._commandBuffers[_engine.frame_index],
-                         VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, _timestampPool,
-                         1);
-
-    _engine.transition_image_layout(
-        _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
-        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_SHADER_WRITE_BIT,
-        VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-        VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+    vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                         _timestampPool, 1);
 
     _rendered = true;
   }
+  VK_CHECK(vkEndCommandBuffer(computeCmd));
+  // Graphics submission: blit to swapchain + present (waits on computeFinished)
+  VK_CHECK(vkBeginCommandBuffer(graphicsCmd, &beginInfo));
 
   _engine.transition_image_layout(
-      _engine._swapchainImages[image_index], VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_READ_BIT,
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+
+  _engine.transition_image_layout(
+      graphicsCmd, _engine._swapchainImages[image_index],
+      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {},
+      VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
   VkImageBlit blitRegion{
       .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
@@ -266,19 +276,18 @@ void Raytracer::recordBuffer(uint32_t image_index) {
       .dstOffsets = {{0, 0, 0},
                      {(int32_t)_engine._swapchainExtent.width,
                       (int32_t)_engine._swapchainExtent.height, 1}}};
-  vkCmdBlitImage(_engine._commandBuffers[_engine.frame_index], _renderTarget,
-                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 _engine._swapchainImages[image_index],
-                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion,
-                 VK_FILTER_LINEAR);
+  vkCmdBlitImage(
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      _engine._swapchainImages[image_index],
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
 
   _engine.transition_image_layout(
-      _engine._swapchainImages[image_index],
+      graphicsCmd, _engine._swapchainImages[image_index],
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       VK_ACCESS_2_TRANSFER_WRITE_BIT, {}, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
-  VK_CHECK(vkEndCommandBuffer(_engine._commandBuffers[_engine.frame_index]));
+  VK_CHECK(vkEndCommandBuffer(graphicsCmd));
 }
 
 void Raytracer::recordRenderTime() {

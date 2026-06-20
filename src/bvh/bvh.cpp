@@ -39,7 +39,7 @@ void Bvh::build() {
   VkCommandPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
       .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT,
-      .queueFamilyIndex = _engine._queueFamilyIndex};
+      .queueFamilyIndex = _engine._computeQueueFamilyIndex};
   VK_CHECK(vkCreateCommandPool(DEVICE, &poolInfo, nullptr, &buildPool));
 
   // Command Buffer
@@ -132,7 +132,7 @@ void Bvh::build() {
   VkSubmitInfo submit{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
                       .commandBufferCount = 1,
                       .pCommandBuffers = &buildCommandBuffer};
-  VK_CHECK(vkQueueSubmit(_engine._graphicsQueue, 1, &submit, fence));
+  VK_CHECK(vkQueueSubmit(_engine._computeQueue, 1, &submit, fence));
   VK_CHECK(vkWaitForFences(DEVICE, 1, &fence, VK_TRUE, UINT64_MAX));
 
 #ifdef EVALUATE

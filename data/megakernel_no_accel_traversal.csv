@@ -1,0 +1,7 @@
+BVH Initialization,0.000244141
+Ray Count,262144
+Rays traced per second,172199,1464.52
+Total BVH Construction Time,0.00463867
+Total Rendering Time,1522.43,13.0894
+Total Run Time,1541.45
+Vulkan Device Init,19.01

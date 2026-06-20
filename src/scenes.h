@@ -48,14 +48,13 @@ inline std::vector<triangle_new> convert_for_gpu(const hittable_list &mesh) {
 
   return new_mesh;
 }
-
-scene_config load_bunny(int image_width, int image_height, int samples) {
+scene_config load_conference(int image_width, int image_height, int samples) {
   scene_config config;
-  config.name = "bunny";
+  config.name = "conference";
 
   auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
   auto mesh_triangles =
-      mesh::load_obj(MODELS_DIR + "bunny.obj", mat, true, 10.0);
+      mesh::load_obj(MODELS_DIR + "conference.obj", mat, true, 10.0);
 
   config.world = convert_for_gpu(*mesh_triangles);
 
@@ -75,28 +74,54 @@ scene_config load_bunny(int image_width, int image_height, int samples) {
   return config;
 }
 
+scene_config load_bunny(int image_width, int image_height, int samples) {
+  scene_config config;
+  config.name = "bunny";
+
+  auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
+  auto mesh_triangles =
+      mesh::load_obj(MODELS_DIR + "bunny.obj", mat, true, 1.0);
+
+  config.world = convert_for_gpu(*mesh_triangles);
+
+  // Camera setup for bunny
+  config.cam.image_width = image_width;
+  config.cam.image_height = image_height;
+  config.cam.samples_per_pixel = 1;
+  config.cam.max_depth = 20;
+  config.cam.background = color(0.7, 0.8, 1.00);
+  config.cam.vfov = 30;
+  config.cam.lookfrom = point3(-2, 3, 6);
+  config.cam.lookat = point3(-0.3, 1.0, 0);
+  config.cam.vup = vec3(0, 1, 0);
+  config.cam.defocus_angle = 0;
+  config.cam.focus_dist = 3.0;
+
+  return config;
+}
+
 scene_config load_teapot(int image_width, int image_height, int samples) {
-    scene_config config;
-    config.name = "teapot";
+  scene_config config;
+  config.name = "teapot";
 
-    auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
-    auto mesh_triangles =
-        mesh::load_obj(MODELS_DIR + "teapot.obj", mat, true, 0.5);
+  auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
+  auto mesh_triangles =
+      mesh::load_obj(MODELS_DIR + "teapot.obj", mat, true, 0.5);
 
-    config.world = convert_for_gpu(*mesh_triangles);
+  config.world = convert_for_gpu(*mesh_triangles);
 
-    // Camera setup for bunny
-    config.cam.image_width = image_width;
-    config.cam.image_height = image_height;
-    config.cam.samples_per_pixel = samples;
-    config.cam.max_depth = 10;
-    config.cam.background = color(0.7, 0.8, 1.00);
-    config.cam.vfov = 30;
-    config.cam.lookfrom = point3(-2, 3, 6);
-    config.cam.lookat = point3(-0.3, 1.0, 0);
-    config.cam.vup = vec3(0, 1, 0);
-    config.cam.defocus_angle = 0;
-    config.cam.focus_dist = 3.0;
+  // Camera setup for bunny
+  config.cam.image_width = image_width;
+  config.cam.image_height = image_height;
+  config.cam.samples_per_pixel = samples;
+  config.cam.max_depth = 10;
+  config.cam.background = color(0.7, 0.8, 1.00);
+  config.cam.vfov = 30;
+  config.cam.lookfrom = point3(-2, 3, 6);
+  config.cam.lookat = point3(-0.3, 1.0, 0);
+  config.cam.vup = vec3(0, 1, 0);
+  config.cam.defocus_angle = 0;
+  config.cam.focus_dist = 3.0;
 
-    return config;
+  return config;
 }
