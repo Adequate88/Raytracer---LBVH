@@ -27,8 +27,8 @@ bool aabb_hit(vec3 ray_origin, vec3 ray_dir, float t_curr_min,
   vec3 t_min_vec = min(t0, t1);
   vec3 t_max_vec = max(t0, t1);
 
-  float t_min = min(min(t_min_vec.x, t_min_vec.y), t_min_vec.z);
-  float t_max = max(max(t_max_vec.x, t_max_vec.y), t_max_vec.z);
+  float t_min = max(max(t_min_vec.x, t_min_vec.y), t_min_vec.z);
+  float t_max = min(min(t_max_vec.x, t_max_vec.y), t_max_vec.z);
 
   return (t_min <= t_max) && (t_max > 0.0) && (t_min < t_curr_min);
 }

@@ -287,6 +287,11 @@ void Raytracer::recordBuffer(uint32_t image_index) {
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
 
   _engine.transition_image_layout(
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_2_TRANSFER_READ_BIT, {},
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+
+  _engine.transition_image_layout(
       graphicsCmd, _engine._swapchainImages[image_index],
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       VK_ACCESS_2_TRANSFER_WRITE_BIT, {}, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
@@ -422,13 +427,19 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
 
-  VkDescriptorSetLayoutBinding layoutExtendBindings[4] = {
+  VkDescriptorSetLayoutBinding bvhExtendBinding{
+      .binding = 4,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
+
+  VkDescriptorSetLayoutBinding layoutExtendBindings[5] = {
       raysExtendBinding, hitRecordsExtendBinding, sceneExtendBinding,
-      lastRayCountExtendBinding };
+      lastRayCountExtendBinding, bvhExtendBinding };
 
   VkDescriptorSetLayoutCreateInfo extendSetInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 4,
+      .bindingCount = 5,
       .pBindings = layoutExtendBindings};
 
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &extendSetInfo, nullptr,
@@ -550,7 +561,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkDescriptorPoolSize renderPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                       .descriptorCount = 2};
   VkDescriptorPoolSize buffersPoolSize{
-      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 31};
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 33};
 
   VkDescriptorPoolSize poolSizes[2] = {renderPoolSize, buffersPoolSize};
   VkDescriptorPoolCreateInfo poolInfo{
@@ -685,7 +696,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendHitRecords0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontExtendDescriptorSets[0],
-      .dstBinding = 1,
+      .dstBinding = 3,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -697,7 +708,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendScene0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontExtendDescriptorSets[0],
-      .dstBinding = 2,
+      .dstBinding = 1,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -709,16 +720,28 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendLastRayCount0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontExtendDescriptorSets[0],
-      .dstBinding = 3,
+      .dstBinding = 4,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorExtendLastRayCountInfo0 };
 
-  VkWriteDescriptorSet writeExtendSets0[4] = {
-      writeExtendRays0, writeExtendHitRecords0, 
-      writeExtendScene0, writeExtendLastRayCount0 };
-  vkUpdateDescriptorSets(_engine._device, 4, writeExtendSets0, 0, nullptr);
+  VkDescriptorBufferInfo descriptorExtendBvhBufferInfo0{_BvhBuffer, 0,
+                                                        VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeExtendBvh0{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontExtendDescriptorSets[0],
+      .dstBinding = 2,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorExtendBvhBufferInfo0};
+
+  VkWriteDescriptorSet writeExtendSets0[5] = {
+      writeExtendRays0, writeExtendHitRecords0,
+      writeExtendScene0, writeExtendLastRayCount0, writeExtendBvh0 };
+  vkUpdateDescriptorSets(_engine._device, 5, writeExtendSets0, 0, nullptr);
 
   // Extend 1
   VkDescriptorBufferInfo descriptorExtendRaysBufferInfo1{
@@ -739,7 +762,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendHitRecords1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontExtendDescriptorSets[1],
-      .dstBinding = 1,
+      .dstBinding = 3,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -751,7 +774,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendScene1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontExtendDescriptorSets[1],
-      .dstBinding = 2,
+      .dstBinding = 1,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -763,16 +786,28 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeExtendLastRayCount1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontExtendDescriptorSets[1],
-      .dstBinding = 3,
+      .dstBinding = 4,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorExtendLastRayCountInfo1 };
 
-  VkWriteDescriptorSet writeExtendSets1[4] = {
-      writeExtendRays1, writeExtendHitRecords1, 
-      writeExtendScene1, writeExtendLastRayCount1 };
-  vkUpdateDescriptorSets(_engine._device, 4, writeExtendSets1, 0, nullptr);
+  VkDescriptorBufferInfo descriptorExtendBvhBufferInfo1{_BvhBuffer, 0,
+                                                        VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeExtendBvh1{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontExtendDescriptorSets[1],
+      .dstBinding = 2,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorExtendBvhBufferInfo1};
+
+  VkWriteDescriptorSet writeExtendSets1[5] = {
+      writeExtendRays1, writeExtendHitRecords1,
+      writeExtendScene1, writeExtendLastRayCount1, writeExtendBvh1 };
+  vkUpdateDescriptorSets(_engine._device, 5, writeExtendSets1, 0, nullptr);
 
   // Shade 0
   VkDescriptorBufferInfo descriptorShadeRaysInBufferInfo0{

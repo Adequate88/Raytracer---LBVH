@@ -35,14 +35,15 @@ int main() {
   METRIC_START_TIME("Total BVH Construction Time");
   METRIC_START_TIME("BVH Initialization");
   bvh.init(config.world.data(), config.world.size() * sizeof(triangle_new));
+
   METRIC_END_TIME("BVH Initialization");
-  // bvh.build();
+  bvh.build();
   METRIC_END_TIME("Total BVH Construction Time");
 
   raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),
                           bvh.bvhBufferHandle());
 
-  // METRIC_BENCHMARK(100, 10, bvh.build());
+  METRIC_BENCHMARK(100, 10, bvh.build());
 
   METRIC_SET_VALUE("Ray Count",
                    static_cast<float>(IMAGE_WIDTH * IMAGE_HEIGHT *
@@ -83,7 +84,7 @@ int main() {
                    METRIC_READ("Vulkan Device Init") +
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
-  METRIC_EXPORT("data/wavefront_no_accel_traversal.csv");
+  METRIC_EXPORT("data/wavefront_with_accel_traversal.csv");
 #endif
 
   return 0;
