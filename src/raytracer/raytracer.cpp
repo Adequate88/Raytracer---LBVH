@@ -282,6 +282,11 @@ void Raytracer::recordBuffer(uint32_t image_index) {
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
 
   _engine.transition_image_layout(
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_2_TRANSFER_READ_BIT, {},
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
+
+  _engine.transition_image_layout(
       graphicsCmd, _engine._swapchainImages[image_index],
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       VK_ACCESS_2_TRANSFER_WRITE_BIT, {}, VK_PIPELINE_STAGE_2_TRANSFER_BIT,

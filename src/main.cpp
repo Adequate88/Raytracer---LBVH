@@ -19,14 +19,13 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  // auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  // auto config = load_conference(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  //    LBVH bvh_tree(config.world.objects);
-  //     config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
-  //     engine.write_image(config.cam.img.data, config.cam.img.width,
-  //     config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
-  //
+  auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  // auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //   auto config = load_conference(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //      LBVH bvh_tree(config.world.objects);
+  //       config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
+  //       engine.write_image(config.cam.img.data, config.cam.img.width,
+  //       config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
 
   config.cam.initialize();
 
@@ -35,8 +34,9 @@ int main() {
   METRIC_START_TIME("Total BVH Construction Time");
   METRIC_START_TIME("BVH Initialization");
   bvh.init(config.world.data(), config.world.size() * sizeof(triangle_new));
+
   METRIC_END_TIME("BVH Initialization");
-  // bvh.build();
+  bvh.build();
   METRIC_END_TIME("Total BVH Construction Time");
 
   raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),

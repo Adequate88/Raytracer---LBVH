@@ -3,34 +3,45 @@
 #include "bvh_include.glsl"
 
 shared uint temp[LOCAL_SIZE];
+shared uint chunk_total;
 
 void main() {
   int tid = int(gl_LocalInvocationID.x);
+  uint carry = 0u;
 
-  temp[tid] = (tid < num_blocks) ? glob_sum[tid] : 0;
-  barrier();
+  for (int base = 0; base < num_blocks; base += int(LOCAL_SIZE)) {
+    int gid = base + tid;
 
-  for (int offset = 1; offset < LOCAL_SIZE; offset <<= 1) {
-    int idx = (tid + 1) * offset * 2 - 1;
-    if (idx < LOCAL_SIZE)
-      temp[idx] += temp[idx - offset];
+    temp[tid] = (gid < num_blocks) ? glob_sum[gid] : 0u;
     barrier();
-  }
 
-  if (tid == 0)
-    temp[LOCAL_SIZE - 1] = 0;
-  barrier();
+    for (int offset = 1; offset < LOCAL_SIZE; offset <<= 1) {
+      int idx = (tid + 1) * offset * 2 - 1;
+      if (idx < LOCAL_SIZE)
+        temp[idx] += temp[idx - offset];
+      barrier();
+    }
 
-  for (int offset = int(LOCAL_SIZE) >> 1; offset > 0; offset >>= 1) {
-    int idx = (tid + 1) * offset * 2 - 1;
-    if (idx < LOCAL_SIZE) {
-      uint t = temp[idx - offset];
-      temp[idx - offset] = temp[idx];
-      temp[idx] += t;
+    if (tid == 0) {
+      chunk_total = temp[LOCAL_SIZE - 1];
+      temp[LOCAL_SIZE - 1] = 0;
     }
     barrier();
-  }
 
-  if (tid < num_blocks)
-    glob_sum[tid] = temp[tid];
+    for (int offset = int(LOCAL_SIZE) >> 1; offset > 0; offset >>= 1) {
+      int idx = (tid + 1) * offset * 2 - 1;
+      if (idx < LOCAL_SIZE) {
+        uint t = temp[idx - offset];
+        temp[idx - offset] = temp[idx];
+        temp[idx] += t;
+      }
+      barrier();
+    }
+
+    if (gid < num_blocks)
+      glob_sum[gid] = temp[tid] + carry;
+
+    carry += chunk_total;
+    barrier();
+  }
 }
