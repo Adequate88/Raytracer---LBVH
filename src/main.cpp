@@ -35,14 +35,14 @@ int main() {
 
   Bvh bvh(engine, config.world.size());
 
-  METRIC_START_TIME("Total BVH Construction Time");
-  METRIC_START_TIME("BVH Initialization");
-  bvh.init(raytracer.sceneBuffer());
-  METRIC_END_TIME("BVH Initialization");
-  bvh.build();
-  METRIC_END_TIME("Total BVH Construction Time");
+  // METRIC_START_TIME("Total BVH Construction Time");
+  // METRIC_START_TIME("BVH Initialization");
+  // bvh.init(raytracer.sceneBuffer());
+  // METRIC_END_TIME("BVH Initialization");
+  // bvh.build();
+  // METRIC_END_TIME("Total BVH Construction Time");
 
-  METRIC_BENCHMARK(100, 10, bvh.build());
+  // METRIC_BENCHMARK(100, 10, bvh.build());
 
   METRIC_SET_VALUE("Ray Count",
                    static_cast<float>(IMAGE_WIDTH * IMAGE_HEIGHT *
@@ -78,10 +78,8 @@ int main() {
   VK_CHECK(vkDeviceWaitIdle(engine._device));
 
 #ifdef EVALUATE
-  METRIC_SET_VALUE("Total Run Time",
-                   METRIC_READ("Vulkan Device Init") +
-                       METRIC_READ("Total BVH Construction Time") +
-                       METRIC_READ("Total Rendering Time"));
+  METRIC_SET_VALUE("Total Run Time", METRIC_READ("Vulkan Device Init") +
+                                         METRIC_READ("Total Rendering Time"));
   METRIC_EXPORT("data/megakernel_no_accel_traversal.csv");
 #endif
 
