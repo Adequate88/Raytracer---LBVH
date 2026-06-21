@@ -1,6 +1,7 @@
 #include "camera.h"
 #include "metrics_macros.h"
 #include "vec3.h"
+#include <iostream>
 
 void camera::render(LBVH &world) {
   METRIC_START_TIME("Total Rendering Time");
@@ -15,6 +16,70 @@ void camera::render(LBVH &world) {
     }
   }
   METRIC_END_TIME("Total Rendering Time");
+}
+
+int camera::diagnose_bvh(
+    LBVH &world,
+    const std::vector<shared_ptr<hittable>> &objects) const {
+  // (a) Structural check: any internal node left with an inverted/empty bbox
+  // (min > max) gets culled by AABB::hit, silently dropping its whole subtree.
+  const auto &nodes = world.get_nodes();
+  int inverted = 0;
+  for (const auto &n : nodes) {
+    if (n.bbox.min_x > n.bbox.max_x || n.bbox.min_y > n.bbox.max_y ||
+        n.bbox.min_z > n.bbox.max_z)
+      inverted++;
+  }
+  std::clog << "[diag] inverted/empty node bboxes: " << inverted << " / "
+            << nodes.size() << "\n";
+
+  // (b) Ground-truth check: brute-force nearest-hit vs BVH nearest-hit, one
+  // deterministic center ray per pixel.
+  int bf_hits = 0, mismatches = 0;
+  int min_i = image_width, max_i = -1, min_j = image_height, max_j = -1;
+  for (int j = 0; j < image_height; j++) {
+    for (int i = 0; i < image_width; i++) {
+      auto pixel_center =
+          pixel00_loc + (i * pixel_delta_u) + (j * pixel_delta_v);
+      ray r(center, pixel_center - center, 0.0);
+
+      hit_record bf;
+      bool bf_hit = false;
+      double closest = infinity;
+      for (const auto &o : objects) {
+        hit_record tmp;
+        if (o->hit(r, interval(0.001, closest), tmp)) {
+          bf_hit = true;
+          closest = tmp.t;
+          bf = tmp;
+        }
+      }
+
+      hit_record bv;
+      bool bv_hit = world.hit(r, interval(0.001, infinity), bv);
+
+      if (bf_hit) {
+        bf_hits++;
+        if (!bv_hit || std::fabs(bv.t - closest) > 1e-4) {
+          mismatches++;
+          min_i = std::min(min_i, i);
+          max_i = std::max(max_i, i);
+          min_j = std::min(min_j, j);
+          max_j = std::max(max_j, j);
+        }
+      }
+    }
+  }
+
+  std::clog << "[diag] pixels where brute-force hit geometry: " << bf_hits
+            << "\n";
+  std::clog << "[diag] pixels where BVH missed/differed: " << mismatches
+            << "\n";
+  if (mismatches > 0) {
+    std::clog << "[diag] mismatch bounding box (image coords): x[" << min_i
+              << "," << max_i << "] y[" << min_j << "," << max_j << "]\n";
+  }
+  return mismatches;
 }
 
 void camera::initialize() {

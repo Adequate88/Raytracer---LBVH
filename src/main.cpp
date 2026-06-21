@@ -1,8 +1,9 @@
 // =============================================================================
 // TEMPORARY benchmark driver (NOT part of the project).
 // Runs the ORIGINAL "OpenCL BVH + CPU raytracer" pipeline that already lives in
-// this repo (LBVH = lbvh_gpu.cpp, camera::render = camera.cpp) on the SAME scene
-// and SAME window size as the current Vulkan run: teapot.obj, 600x600, 20 spp.
+// this repo (LBVH = lbvh_gpu.cpp, camera::render = camera.cpp) on the SAME
+// scene and SAME window size as the current Vulkan run: teapot.obj, 600x600, 20
+// spp.
 //
 // It emits EXACTLY the same 13 metric rows the Vulkan/main version emits (same
 // names, same definitions, no extras), and writes the rendered image so it can
@@ -24,14 +25,14 @@
 int main() {
   // --- Scene: identical to scenes.h:load_teapot(600, 600, 20) ---------------
   auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
-  auto mesh_triangles = mesh::load_obj("models/teapot.obj", mat, true, 0.5);
+  auto mesh_triangles = mesh::load_obj("models/bunny.obj", mat, true, 1.0);
   auto &objects = mesh_triangles->objects;
 
   camera cam;
-  cam.image_width = 600;
-  cam.image_height = 600;
-  cam.samples_per_pixel = 20;
-  cam.max_depth = 10;
+  cam.image_width = 512;
+  cam.image_height = 512;
+  cam.samples_per_pixel = 1;
+  cam.max_depth = 30;
   cam.background = color(0.7, 0.8, 1.00);
   cam.vfov = 30;
   cam.lookfrom = point3(-2, 3, 6);
@@ -52,9 +53,8 @@ int main() {
   METRIC_SET_VALUE("Total BVH Construction Time",
                    static_cast<float>(bvh.get_construction_ms()));
 
-  // --- Save one clean render to PNG for visual comparison -------------------
-  // camera::render appends to img.data (BGRA), so clear first to keep exactly
-  // one frame, then swap B<->R for stb's RGBA expectation.
+  // --- DIAGNOSTIC (temporary): render with a higher bounce limit -------------
+  // cam.max_depth = 50;
   cam.img.data.clear();
   cam.render(bvh);
   {
@@ -65,9 +65,8 @@ int main() {
       rgba[p + 2] = cam.img.data[p + 0]; // B
       rgba[p + 3] = cam.img.data[p + 3]; // A
     }
-    stbi_write_png("/home/growlithe/Portfolio/original_opencl_cpu_render.png",
-                   cam.image_width, cam.image_height, 4, rgba.data(),
-                   cam.image_width * 4);
+    stbi_write_png("data/baseline_image.png", cam.image_width, cam.image_height,
+                   4, rgba.data(), cam.image_width * 4);
   }
 
   METRIC_SET_VALUE("Ray Count", static_cast<float>(600 * 600 * 20));
@@ -75,7 +74,7 @@ int main() {
   // --- Sampled CPU render: "Total Rendering Time" + "Rays traced per second" -
   // (Vulkan samples the render; fewer iterations here since each CPU frame is
   // ~50 s. "Total Rendering Time" is emitted by camera::render.)
-  METRIC_BENCHMARK(3, 1, {
+  METRIC_BENCHMARK(15, 3, {
     cam.render(bvh);
     METRIC_SET_VALUE("Rays traced per second",
                      METRIC_READ("Ray Count") /
@@ -93,6 +92,6 @@ int main() {
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
 
-  METRIC_EXPORT("/home/growlithe/Portfolio/original_opencl_cpu_metrics.csv");
+  METRIC_EXPORT("data/baseline_metrics.csv");
   return 0;
 }

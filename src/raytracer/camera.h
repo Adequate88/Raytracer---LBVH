@@ -48,6 +48,13 @@ public:
   void initialize();
   void render(LBVH &world);
 
+  // DIAGNOSTIC (temporary): compare the BVH against a brute-force linear scan
+  // over every triangle, one deterministic ray per pixel. Reports pixels where
+  // brute force hits geometry but the BVH misses it (or returns a different
+  // nearest t) -- i.e. holes caused by culled/empty subtrees.
+  int diagnose_bvh(LBVH &world,
+                   const std::vector<shared_ptr<hittable>> &objects) const;
+
 private:
   double pixel_samples_scale;
   point3 center;
