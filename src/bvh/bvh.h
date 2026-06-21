@@ -21,8 +21,13 @@ class Bvh {
 public:
   Bvh(VulkanEngine &engine, size_t primitiveCount);
 
-  void init(VkBuffer &primBuffer);
+  void init(const void *data, size_t size);
   void build();
+
+  // The Bvh owns the scene (primitive) buffer and the node buffer; the
+  // raytracer binds both of these for traversal.
+  VkBuffer sceneBufferHandle() const { return sceneBuffer.buffer; }
+  VkBuffer bvhBufferHandle() const { return bvhBuffer.buffer; }
 
 private:
   VulkanEngine &_engine;
@@ -32,6 +37,7 @@ private:
   size_t histogramElems;
   size_t numBlocks;
 
+  bufferMemory sceneBuffer;
   bufferMemory bvhBuffer;
   bufferMemory primBboxBuffer;
   bufferMemory mortonCodesBuffer;
@@ -50,6 +56,7 @@ private:
   std::vector<VkPipeline> _bvhPipelines;
 
   void createBvhBuffers();
-  void createDescriptor(VkBuffer &primBuffer);
+  void createSceneBuffer(const void *data, size_t size);
+  void createDescriptor();
   void createPipelines();
 };

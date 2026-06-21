@@ -2,6 +2,7 @@
 #include "lbvh_gpu.h"
 #include "metrics_macros.h"
 #include "raytracer.h"
+#include "scene_generator.h"
 #include "scenes.h"
 #include "triangle.h"
 #include "types.h"
@@ -20,26 +21,26 @@ int main() {
 
   // auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
   auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  // LBVH bvh_tree(config.world.objects);
-  //  config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
-  //  engine.write_image(config.cam.img.data, config.cam.img.width,
-  //  config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
+  // auto config = load_conference(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //    LBVH bvh_tree(config.world.objects);
+  //     config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
+  //     engine.write_image(config.cam.img.data, config.cam.img.width,
+  //     config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
   //
 
   config.cam.initialize();
-
-  raytracer.initRaytracer(config.world.data(),
-                          config.world.size() * sizeof(triangle_new),
-                          &config.cam.gpu_constants);
 
   Bvh bvh(engine, config.world.size());
 
   METRIC_START_TIME("Total BVH Construction Time");
   METRIC_START_TIME("BVH Initialization");
-  bvh.init(raytracer.sceneBuffer());
+  bvh.init(config.world.data(), config.world.size() * sizeof(triangle_new));
   METRIC_END_TIME("BVH Initialization");
-  bvh.build();
+  // bvh.build();
   METRIC_END_TIME("Total BVH Construction Time");
+
+  raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),
+                          bvh.bvhBufferHandle());
 
   METRIC_BENCHMARK(100, 10, bvh.build());
 
@@ -54,7 +55,7 @@ int main() {
     while (SDL_PollEvent(&e) != 0) {
     }
     uint32_t idx = engine.begin_frame();
-    raytracer.recordBuffer(idx);
+    raytracer.recordWavefrontBuffer(idx);
     engine.end_frame(idx);
     raytracer.recordRenderTime();
     METRIC_SET_VALUE("Rays traced per second",
@@ -82,9 +83,8 @@ int main() {
                    METRIC_READ("Vulkan Device Init") +
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
-#endif
-
   METRIC_EXPORT("data/wavefront_no_accel_traversal.csv");
+#endif
 
   return 0;
 }

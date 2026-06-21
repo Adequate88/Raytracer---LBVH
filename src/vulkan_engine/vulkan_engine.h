@@ -7,12 +7,12 @@
 #include <vulkan/vulkan.h>
 #include <vulkan/vulkan_raii.hpp>
 
-constexpr uint32_t IMAGE_WIDTH = 600;
-constexpr uint32_t IMAGE_HEIGHT = 600;
+constexpr uint32_t IMAGE_WIDTH = 512;
+constexpr uint32_t IMAGE_HEIGHT = 512;
 
 #include "vulkan_types.h"
 
-constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+constexpr int MAX_FRAMES_IN_FLIGHT = 1;
 
 class VulkanEngine {
 public:
@@ -28,6 +28,9 @@ public:
   // Queue
   VkQueue _graphicsQueue;
   uint32_t _queueFamilyIndex = 0;
+
+  VkQueue _computeQueue;
+  uint32_t _computeQueueFamilyIndex = 0;
 
   // Basics
   VkInstance _instance;
@@ -56,6 +59,9 @@ public:
   VkCommandPool _commandPool;
   std::vector<VkCommandBuffer> _commandBuffers;
 
+  VkCommandPool _computeCommandPool;
+  std::vector<VkCommandBuffer> _computeCommandBuffers;
+
   // Window
   VkExtent2D _windowExtent{IMAGE_WIDTH, IMAGE_HEIGHT};
   struct SDL_Window *_window{nullptr};
@@ -65,6 +71,7 @@ public:
   // Sync Objects
   std::vector<VkSemaphore> _presentCompleteSemaphores;
   std::vector<VkSemaphore> _renderFinishedSemaphores;
+  std::vector<VkSemaphore> _computeFinishedSemaphores;
   std::vector<VkFence> _inFlightFences;
 
   VkBuffer placeholderData;
@@ -81,6 +88,14 @@ public:
   void allocate_buffer(VkBuffer& buffer, VkDeviceMemory& deviceMemory,
       VkDeviceSize size, VkBufferUsageFlags usage_flags,
       VkMemoryPropertyFlags properties);
+
+  void transition_image_layout(VkCommandBuffer cmd, VkImage image,
+                               VkImageLayout old_layout,
+                               VkImageLayout new_layout,
+                               VkAccessFlags2 src_access_flags,
+                               VkAccessFlags2 dst_access_flags,
+                               VkPipelineStageFlags2 src_stage_flags,
+                               VkPipelineStageFlags2 dst_stage_flags);
 
   uint32_t frame_index = 0;
 

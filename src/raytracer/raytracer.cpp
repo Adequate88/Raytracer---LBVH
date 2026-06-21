@@ -9,13 +9,14 @@
 
 Raytracer::Raytracer(VulkanEngine &engine) : _engine(engine) {}
 
-void Raytracer::initRaytracer(const void *data, size_t size,
-                              const void *cameraData) {
+void Raytracer::initRaytracer(const void *cameraData, VkBuffer sceneBuffer,
+                              VkBuffer bvhBuffer) {
   _cameraConstants = cameraData;
+  _sceneBuffer = sceneBuffer;
+  _BvhBuffer = bvhBuffer;
 
   createTimestampPool();
   createRenderTarget();
-  createSceneBuffer(data, size);
   createDescriptors();
   createPipeline();
 
@@ -36,6 +37,11 @@ void Raytracer::createTimestampPool() {
 }
 
 void Raytracer::createRenderTarget() {
+  uint32_t queueFamilies[2] = {_engine._queueFamilyIndex,
+                               _engine._computeQueueFamilyIndex};
+  bool concurrent =
+      _engine._queueFamilyIndex != _engine._computeQueueFamilyIndex;
+
   VkImageCreateInfo imgInfo{
       .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
       .imageType = VK_IMAGE_TYPE_2D,
@@ -46,7 +52,10 @@ void Raytracer::createRenderTarget() {
       .samples = VK_SAMPLE_COUNT_1_BIT,
       .tiling = VK_IMAGE_TILING_OPTIMAL,
       .usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .sharingMode =
+          concurrent ? VK_SHARING_MODE_CONCURRENT : VK_SHARING_MODE_EXCLUSIVE,
+      .queueFamilyIndexCount = concurrent ? 2u : 0u,
+      .pQueueFamilyIndices = concurrent ? queueFamilies : nullptr,
       .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
 
   VK_CHECK(vkCreateImage(_engine._device, &imgInfo, nullptr, &_renderTarget));
@@ -77,38 +86,6 @@ void Raytracer::createRenderTarget() {
                              &_renderTargetView));
 }
 
-void Raytracer::createSceneBuffer(const void *data, size_t size) {
-  VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-                                .size = size,
-                                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-                                .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
-
-  VK_CHECK(
-      vkCreateBuffer(_engine._device, &bufferInfo, nullptr, &_sceneBuffer));
-
-  VkMemoryRequirements memRequirements;
-  vkGetBufferMemoryRequirements(_engine._device, _sceneBuffer,
-                                &memRequirements);
-
-  uint32_t mem_index =
-      find_memory_type(VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-                           VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                       memRequirements.memoryTypeBits);
-
-  VkMemoryAllocateInfo allocInfo{.sType =
-                                     VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
-                                 .allocationSize = memRequirements.size,
-                                 .memoryTypeIndex = mem_index};
-  VK_CHECK(
-      vkAllocateMemory(_engine._device, &allocInfo, nullptr, &_sceneMemory));
-  VK_CHECK(vkBindBufferMemory(_engine._device, _sceneBuffer, _sceneMemory, 0));
-
-  void *mapped;
-  VK_CHECK(vkMapMemory(_engine._device, _sceneMemory, 0, size, {}, &mapped));
-  memcpy(mapped, data, size);
-  vkUnmapMemory(_engine._device, _sceneMemory);
-}
-
 void Raytracer::createDescriptors() {
   VkDescriptorSetLayoutBinding renderBinding{
       .binding = 0,
@@ -122,12 +99,18 @@ void Raytracer::createDescriptors() {
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
 
-  VkDescriptorSetLayoutBinding layoutBindings[2] = {renderBinding,
-                                                    sceneBinding};
+  VkDescriptorSetLayoutBinding BvhBinding{
+      .binding = 2,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+
+  VkDescriptorSetLayoutBinding layoutBindings[3] = {renderBinding, sceneBinding,
+                                                    BvhBinding};
 
   VkDescriptorSetLayoutCreateInfo setInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 2,
+      .bindingCount = 3,
       .pBindings = layoutBindings};
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &setInfo, nullptr,
                                        &_setLayout));
@@ -137,12 +120,15 @@ void Raytracer::createDescriptors() {
                                       .descriptorCount = 1};
   VkDescriptorPoolSize scenePoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                                      .descriptorCount = 1};
+  VkDescriptorPoolSize BvhPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                   .descriptorCount = 1};
 
-  VkDescriptorPoolSize poolSizes[2] = {renderPoolSize, scenePoolSize};
+  VkDescriptorPoolSize poolSizes[3] = {renderPoolSize, scenePoolSize,
+                                       BvhPoolSize};
   VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
       .maxSets = 1,
-      .poolSizeCount = 2,
+      .poolSizeCount = 3,
       .pPoolSizes = poolSizes};
 
   VK_CHECK(vkCreateDescriptorPool(_engine._device, &poolInfo, nullptr,
@@ -180,8 +166,19 @@ void Raytracer::createDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorBufferInfo};
 
-  VkWriteDescriptorSet writeSets[2] = {writeRender, writeScene};
-  vkUpdateDescriptorSets(_engine._device, 2, writeSets, 0, nullptr);
+  VkDescriptorBufferInfo BvhDescriptorBufferInfo{_BvhBuffer, 0, VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeBvh{.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                                .dstSet = _descriptorSet,
+                                .dstBinding = 2,
+                                .dstArrayElement = 0,
+                                .descriptorCount = 1,
+                                .descriptorType =
+                                    VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                .pBufferInfo = &BvhDescriptorBufferInfo};
+
+  VkWriteDescriptorSet writeSets[3] = {writeRender, writeScene, writeBvh};
+  vkUpdateDescriptorSets(_engine._device, 3, writeSets, 0, nullptr);
 }
 
 void Raytracer::createPipeline() {
@@ -222,52 +219,58 @@ void Raytracer::createPipeline() {
 }
 
 void Raytracer::recordBuffer(uint32_t image_index) {
+  VkCommandBuffer computeCmd =
+      _engine._computeCommandBuffers[_engine.frame_index];
+  VkCommandBuffer graphicsCmd = _engine._commandBuffers[_engine.frame_index];
+
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 
-  VK_CHECK(vkBeginCommandBuffer(_engine._commandBuffers[_engine.frame_index],
-                                &beginInfo));
+  // Compute submission: the raytrace dispatch (runs on the 60s compute ring)
+  VK_CHECK(vkBeginCommandBuffer(computeCmd, &beginInfo));
 
-  vkCmdResetQueryPool(_engine._commandBuffers[_engine.frame_index],
-                      _timestampPool, 0, 2);
+  if (!_rendered) {
+    vkCmdResetQueryPool(computeCmd, _timestampPool, 0, 2);
 
-  vkCmdPushConstants(_engine._commandBuffers[_engine.frame_index], _layout,
-                     VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
-                     _cameraConstants); // TODO ALSO HARDCODE 64 bytes here
+    vkCmdPushConstants(computeCmd, _layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
+                       _cameraConstants);
+
+    _engine.transition_image_layout(
+        computeCmd, _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_GENERAL, {}, VK_ACCESS_2_SHADER_WRITE_BIT,
+        VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
+
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
+
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE, _layout,
+                            0, 1, &_descriptorSet, 0, nullptr);
+
+    vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                         _timestampPool, 0);
+
+    vkCmdDispatch(computeCmd, (_engine._windowExtent.width + 15) / 16,
+                  (_engine._windowExtent.height + 15) / 16, 1);
+
+    vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                         _timestampPool, 1);
+
+    _rendered = true;
+  }
+  VK_CHECK(vkEndCommandBuffer(computeCmd));
+  // Graphics submission: blit to swapchain + present (waits on computeFinished)
+  VK_CHECK(vkBeginCommandBuffer(graphicsCmd, &beginInfo));
 
   _engine.transition_image_layout(
-      _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, {},
-      VK_ACCESS_2_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
-
-  vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                    VK_PIPELINE_BIND_POINT_COMPUTE, _pipeline);
-
-  vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                          VK_PIPELINE_BIND_POINT_COMPUTE, _layout, 0, 1,
-                          &_descriptorSet, 0, nullptr);
-
-  vkCmdWriteTimestamp2(_engine._commandBuffers[_engine.frame_index],
-                       VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, _timestampPool, 0);
-
-  vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
-                (_engine._windowExtent.width + 15) / 16,
-                (_engine._windowExtent.height + 15) / 16, 1);
-
-  vkCmdWriteTimestamp2(_engine._commandBuffers[_engine.frame_index],
-                       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT, _timestampPool,
-                       1);
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_READ_BIT,
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
   _engine.transition_image_layout(
-      _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
-      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_SHADER_WRITE_BIT,
-      VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      graphicsCmd, _engine._swapchainImages[image_index],
+      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {},
+      VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
       VK_PIPELINE_STAGE_2_TRANSFER_BIT);
-
-  _engine.transition_image_layout(
-      _engine._swapchainImages[image_index], VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
   VkImageBlit blitRegion{
       .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
@@ -278,19 +281,29 @@ void Raytracer::recordBuffer(uint32_t image_index) {
       .dstOffsets = {{0, 0, 0},
                      {(int32_t)_engine._swapchainExtent.width,
                       (int32_t)_engine._swapchainExtent.height, 1}}};
-  vkCmdBlitImage(_engine._commandBuffers[_engine.frame_index], _renderTarget,
-                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                 _engine._swapchainImages[image_index],
-                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion,
-                 VK_FILTER_LINEAR);
+  vkCmdBlitImage(
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      _engine._swapchainImages[image_index],
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion, VK_FILTER_LINEAR);
 
   _engine.transition_image_layout(
-      _engine._swapchainImages[image_index],
+      graphicsCmd, _engine._swapchainImages[image_index],
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       VK_ACCESS_2_TRANSFER_WRITE_BIT, {}, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
-  VK_CHECK(vkEndCommandBuffer(_engine._commandBuffers[_engine.frame_index]));
+  VK_CHECK(vkEndCommandBuffer(graphicsCmd));
+}
+
+void Raytracer::recordRenderTime() {
+  uint64_t timestamps[2];
+  VK_CHECK(vkGetQueryPoolResults(
+      _engine._device, _timestampPool, 0, 2, sizeof(timestamps), timestamps,
+      sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
+
+  float ms = static_cast<float>(timestamps[1] - timestamps[0]) *
+             _engine._timestampPeriod * 1e-6f;
+  METRIC_SET_VALUE("Total Rendering Time", ms);
 }
 
 // Wavefront
@@ -1134,196 +1147,188 @@ void Raytracer::createWavefrontMemoryBarrier() {
 }
 
 void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
+  VkCommandBuffer computeCmd =
+      _engine._computeCommandBuffers[_engine.frame_index];
+  VkCommandBuffer graphicsCmd = _engine._commandBuffers[_engine.frame_index];
+
   VkCommandBufferBeginInfo beginInfo{
       .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 
-  VK_CHECK(vkBeginCommandBuffer(_engine._commandBuffers[_engine.frame_index],
-                                &beginInfo));
+  VK_CHECK(vkBeginCommandBuffer(computeCmd, &beginInfo));
+
+  vkCmdResetQueryPool(computeCmd, _timestampPool, 0, 2);
+
+  vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+                       _timestampPool, 0);
 
   // Generate
-  vkCmdPushConstants(_engine._commandBuffers[_engine.frame_index],
-                     _wavefrontGenerateLayout, VK_SHADER_STAGE_COMPUTE_BIT, 0,
-                     64,
+  vkCmdPushConstants(computeCmd, _wavefrontGenerateLayout,
+                     VK_SHADER_STAGE_COMPUTE_BIT, 0, 64,
                      _cameraConstants); // TODO ALSO HARDCODE 64 bytes here
 
   _engine.transition_image_layout(
-      _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, {},
-      VK_ACCESS_2_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+      computeCmd, _renderTarget, VK_IMAGE_LAYOUT_UNDEFINED,
+      VK_IMAGE_LAYOUT_GENERAL, {}, VK_ACCESS_2_SHADER_WRITE_BIT,
+      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
-  vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                    VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontGeneratePipeline);
+  vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    _wavefrontGeneratePipeline);
 
-  vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                          VK_PIPELINE_BIND_POINT_COMPUTE,
+  vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                           _wavefrontGenerateLayout, 0, 1,
                           &_wavefrontGenerateDescriptorSet, 0, nullptr);
 
-  vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
-                (_engine._windowExtent.width + 15) / 16,
+  vkCmdDispatch(computeCmd, (_engine._windowExtent.width + 15) / 16,
                 (_engine._windowExtent.height + 15) / 16, 1);
 
-  vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                  _wavefrontFinalRadianceBuffer, 0, VK_WHOLE_SIZE, 0);
+  vkCmdFillBuffer(computeCmd, _wavefrontFinalRadianceBuffer, 0, VK_WHOLE_SIZE,
+                  0);
 
   // Fill correct value into dispatch buffer for first extend
-  vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                  _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 
-                  _engine._windowExtent.width * _engine._windowExtent.height * 10); // Samples = 10
+  vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE,
+                  _engine._windowExtent.width * _engine._windowExtent.height *
+                      10); // Samples = 10
 
-  vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-      &_wavefrontMemoryDependency);
+  vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
-  vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-      VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontDispatchPipeline);
+  vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    _wavefrontDispatchPipeline);
 
-  vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-      VK_PIPELINE_BIND_POINT_COMPUTE,
-      _wavefrontDispatchLayout, 0, 1,
-      &_wavefrontDispatchDescriptorSet, 0, nullptr);
+  vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                          _wavefrontDispatchLayout, 0, 1,
+                          &_wavefrontDispatchDescriptorSet, 0, nullptr);
 
-  vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
+  vkCmdDispatch(computeCmd, 1, 1, 1);
 
   // Extend and Shade loop
   // MAX BOUNCES = 10
   for (int i = 0; i < 10; i += 2) {
     // Memory barrier either between generate or shade and extend
-    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-                          &_wavefrontMemoryDependency);
+    vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Extend 1
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                      VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontExtendPipeline);
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _wavefrontExtendPipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                            VK_PIPELINE_BIND_POINT_COMPUTE,
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _wavefrontExtendLayout, 0, 1,
                             &_wavefrontExtendDescriptorSets[0], 0, nullptr);
 
-    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
-        _wavefrontDispatchBuffer, 0);
+    vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
 
     // Reset ray count
-    vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                    _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 0);
+    vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE,
+                    0);
 
     // Memory barrier between extend 1 and shade 1
-    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-                          &_wavefrontMemoryDependency);
+    vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Shade 1
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                      VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontShadePipeline);
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _wavefrontShadePipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                            VK_PIPELINE_BIND_POINT_COMPUTE,
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _wavefrontShadeLayout, 0, 1,
                             &_wavefrontShadeDescriptorSets[0], 0, nullptr);
 
-    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
-        _wavefrontDispatchBuffer, 0);
+    vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
 
-    // Memory barrier between shade 1 and dispatch 1 
-    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-        &_wavefrontMemoryDependency);
+    // Memory barrier between shade 1 and dispatch 1
+    vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
-    // Dispatch 1 
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-        VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontDispatchPipeline);
+    // Dispatch 1
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _wavefrontDispatchPipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-        VK_PIPELINE_BIND_POINT_COMPUTE,
-        _wavefrontDispatchLayout, 0, 1,
-        &_wavefrontDispatchDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            _wavefrontDispatchLayout, 0, 1,
+                            &_wavefrontDispatchDescriptorSet, 0, nullptr);
 
-    vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
+    vkCmdDispatch(computeCmd, 1, 1, 1);
 
     // Memory barrier between dispatch 1 and extend 2
-    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-                          &_wavefrontMemoryDependency);
+    vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Extend 2
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                      VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontExtendPipeline);
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _wavefrontExtendPipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                            VK_PIPELINE_BIND_POINT_COMPUTE,
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _wavefrontExtendLayout, 0, 1,
                             &_wavefrontExtendDescriptorSets[1], 0, nullptr);
 
-    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
-        _wavefrontDispatchBuffer, 0);
+    vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
 
     // Reset ray count
-    vkCmdFillBuffer(_engine._commandBuffers[_engine.frame_index],
-                    _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE, 0);
+    vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE,
+                    0);
 
     // Memory barrier between extend 1 and shade 1
-    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-                          &_wavefrontMemoryDependency);
+    vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Shade 2
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                      VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontShadePipeline);
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _wavefrontShadePipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                            VK_PIPELINE_BIND_POINT_COMPUTE,
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _wavefrontShadeLayout, 0, 1,
                             &_wavefrontShadeDescriptorSets[1], 0, nullptr);
 
-    vkCmdDispatchIndirect(_engine._commandBuffers[_engine.frame_index],
-        _wavefrontDispatchBuffer, 0);
+    vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
 
-    // Memory barrier between shade 2 and dispatch 2 
-    vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-        &_wavefrontMemoryDependency);
+    // Memory barrier between shade 2 and dispatch 2
+    vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
-    // Dispatch 2 
-    vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-        VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontDispatchPipeline);
+    // Dispatch 2
+    vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                      _wavefrontDispatchPipeline);
 
-    vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-        VK_PIPELINE_BIND_POINT_COMPUTE,
-        _wavefrontDispatchLayout, 0, 1,
-        &_wavefrontDispatchDescriptorSet, 0, nullptr);
+    vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                            _wavefrontDispatchLayout, 0, 1,
+                            &_wavefrontDispatchDescriptorSet, 0, nullptr);
 
-    vkCmdDispatch(_engine._commandBuffers[_engine.frame_index], 1, 1, 1);
+    vkCmdDispatch(computeCmd, 1, 1, 1);
   }
 
   // Memory barrier between shade and finalize
-  vkCmdPipelineBarrier2(_engine._commandBuffers[_engine.frame_index],
-                        &_wavefrontMemoryDependency);
+  vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
   // Finalize
   _engine.transition_image_layout(
-      _renderTarget, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL,
-      VK_ACCESS_2_SHADER_WRITE_BIT, VK_ACCESS_2_SHADER_WRITE_BIT,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT);
+      computeCmd, _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
+      VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_2_SHADER_WRITE_BIT,
+      VK_ACCESS_2_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
-  vkCmdBindPipeline(_engine._commandBuffers[_engine.frame_index],
-                    VK_PIPELINE_BIND_POINT_COMPUTE, _wavefrontFinalizePipeline);
+  vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+                    _wavefrontFinalizePipeline);
 
-  vkCmdBindDescriptorSets(_engine._commandBuffers[_engine.frame_index],
-                          VK_PIPELINE_BIND_POINT_COMPUTE,
+  vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                           _wavefrontFinalizeLayout, 0, 1,
                           &_wavefrontFinalizeDescriptorSet, 0, nullptr);
 
-  vkCmdDispatch(_engine._commandBuffers[_engine.frame_index],
-                (_engine._windowExtent.width + 15) / 16,
+  vkCmdDispatch(computeCmd, (_engine._windowExtent.width + 15) / 16,
                 (_engine._windowExtent.height + 15) / 16, 1);
+
+  vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                       _timestampPool, 1);
+
+  VK_CHECK(vkEndCommandBuffer(computeCmd));
+
+  VK_CHECK(vkBeginCommandBuffer(graphicsCmd, &beginInfo));
 
   // Rest
   _engine.transition_image_layout(
-      _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
-      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_2_SHADER_WRITE_BIT,
-      VK_ACCESS_2_TRANSFER_READ_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
-      VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+      graphicsCmd, _renderTarget, VK_IMAGE_LAYOUT_GENERAL,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_READ_BIT,
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
   _engine.transition_image_layout(
-      _engine._swapchainImages[image_index], VK_IMAGE_LAYOUT_UNDEFINED,
-      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {}, VK_ACCESS_2_TRANSFER_WRITE_BIT,
-      VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT);
+      graphicsCmd, _engine._swapchainImages[image_index],
+      VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, {},
+      VK_ACCESS_2_TRANSFER_WRITE_BIT, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_2_TRANSFER_BIT);
 
   VkImageBlit blitRegion{
       .srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
@@ -1334,27 +1339,17 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
       .dstOffsets = {{0, 0, 0},
                      {(int32_t)_engine._swapchainExtent.width,
                       (int32_t)_engine._swapchainExtent.height, 1}}};
-  vkCmdBlitImage(_engine._commandBuffers[_engine.frame_index], _renderTarget,
+  vkCmdBlitImage(graphicsCmd, _renderTarget,
                  VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                  _engine._swapchainImages[image_index],
                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &blitRegion,
                  VK_FILTER_LINEAR);
 
   _engine.transition_image_layout(
-      _engine._swapchainImages[image_index],
+      graphicsCmd, _engine._swapchainImages[image_index],
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
       VK_ACCESS_2_TRANSFER_WRITE_BIT, {}, VK_PIPELINE_STAGE_2_TRANSFER_BIT,
       VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT);
 
-  VK_CHECK(vkEndCommandBuffer(_engine._commandBuffers[_engine.frame_index]));
-}
-void Raytracer::recordRenderTime() {
-  uint64_t timestamps[2];
-  VK_CHECK(vkGetQueryPoolResults(
-      _engine._device, _timestampPool, 0, 2, sizeof(timestamps), timestamps,
-      sizeof(uint64_t), VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT));
-
-  float ms = static_cast<float>(timestamps[1] - timestamps[0]) *
-             _engine._timestampPeriod * 1e-6f;
-  METRIC_SET_VALUE("Total Rendering Time", ms);
+  VK_CHECK(vkEndCommandBuffer(graphicsCmd));
 }
