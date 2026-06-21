@@ -32,7 +32,7 @@ int main() {
   cam.image_width = 512;
   cam.image_height = 512;
   cam.samples_per_pixel = 1;
-  cam.max_depth = 30;
+  cam.max_depth = 20;
   cam.background = color(0.7, 0.8, 1.00);
   cam.vfov = 30;
   cam.lookfrom = point3(-2, 3, 6);
@@ -69,7 +69,7 @@ int main() {
                    4, rgba.data(), cam.image_width * 4);
   }
 
-  METRIC_SET_VALUE("Ray Count", static_cast<float>(600 * 600 * 20));
+  METRIC_SET_VALUE("Ray Count", static_cast<float>(512 * 512 * 20));
 
   // --- Sampled CPU render: "Total Rendering Time" + "Rays traced per second" -
   // (Vulkan samples the render; fewer iterations here since each CPU frame is
