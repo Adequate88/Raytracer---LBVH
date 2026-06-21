@@ -19,13 +19,13 @@ int main() {
 
   Raytracer raytracer(engine);
 
-  // auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  // auto config = load_conference(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
-  //    LBVH bvh_tree(config.world.objects);
-  //     config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
-  //     engine.write_image(config.cam.img.data, config.cam.img.width,
-  //     config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
+  auto config = load_bunny(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  // auto config = load_teapot(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //  auto config = load_conference(IMAGE_WIDTH, IMAGE_HEIGHT, SAMPLES);
+  //     LBVH bvh_tree(config.world.objects);
+  //      config.cam.render(bvh_tree); // THIS IS OLD CPU RAYTRACER
+  //      engine.write_image(config.cam.img.data, config.cam.img.width,
+  //      config.cam.img.height); // OLD WRITE CPU IMAGE TO DISPLAy
   //
 
   config.cam.initialize();
@@ -42,7 +42,7 @@ int main() {
   raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),
                           bvh.bvhBufferHandle());
 
-  METRIC_BENCHMARK(100, 10, bvh.build());
+  // METRIC_BENCHMARK(100, 10, bvh.build());
 
   METRIC_SET_VALUE("Ray Count",
                    static_cast<float>(IMAGE_WIDTH * IMAGE_HEIGHT *

@@ -1,6 +1,6 @@
 #version 460
 
-const int SAMPLES = 10;
+const int SAMPLES = 1;
 
 layout(local_size_x = 16, local_size_y = 16) in;
 
@@ -23,6 +23,8 @@ void main() {
     }
 
     energy /= float(SAMPLES);
+
+    energy = max(energy, vec3(0.0));
 
     imageStore(img, thread, vec4(energy , 1.0));
   }

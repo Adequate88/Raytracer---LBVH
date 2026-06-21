@@ -308,9 +308,9 @@ void Raytracer::recordRenderTime() {
 
 // Wavefront
 void Raytracer::createWavefrontBuffers() {
-  // SAMPLES = 10
+  // SAMPLES = 1
   const VkDeviceSize nrOfPaths =
-      _engine._windowExtent.width * _engine._windowExtent.height * 10;
+      _engine._windowExtent.width * _engine._windowExtent.height * 1;
 
   // Ray buffers
   _engine.allocate_buffer(
@@ -345,12 +345,17 @@ void Raytracer::createWavefrontBuffers() {
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
-  // Next Ray Count buffer
-  _engine.allocate_buffer(_wavefrontNextRayCountBuffer,
-                          _wavefrontNextRayCountBufferMemory, sizeof(uint32_t),
-                          VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                              VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-                          VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  // Next Ray Count buffers
+  _engine.allocate_buffer(
+    _wavefrontNextRayCountBuffers[0], _wavefrontNextRayCountBuffersMemory[0], 
+    sizeof(uint32_t),
+    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+    VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+  _engine.allocate_buffer(
+      _wavefrontNextRayCountBuffers[1], _wavefrontNextRayCountBuffersMemory[1],
+      sizeof(uint32_t),
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
   _engine.allocate_buffer(
       _wavefrontDispatchBuffer, _wavefrontDispatchBufferMemory,
@@ -387,6 +392,7 @@ void Raytracer::createWavefrontDescriptors() {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 3,
       .pBindings = layoutGenerateBindings};
+
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &generateSetInfo,
                                        nullptr,
                                        &_wavefrontGenerateDescriptorSetLayout));
@@ -410,13 +416,21 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
 
-  VkDescriptorSetLayoutBinding layoutExtendBindings[3] = {
-      raysExtendBinding, hitRecordsExtendBinding, sceneExtendBinding};
+  VkDescriptorSetLayoutBinding lastRayCountExtendBinding{
+      .binding = 3,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
+
+  VkDescriptorSetLayoutBinding layoutExtendBindings[4] = {
+      raysExtendBinding, hitRecordsExtendBinding, sceneExtendBinding,
+      lastRayCountExtendBinding };
 
   VkDescriptorSetLayoutCreateInfo extendSetInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 3,
+      .bindingCount = 4,
       .pBindings = layoutExtendBindings};
+
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &extendSetInfo, nullptr,
                                        &_wavefrontExtendDescriptorSetLayout));
 
@@ -439,40 +453,47 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
 
-  VkDescriptorSetLayoutBinding raysOutShadeBinding{
+  VkDescriptorSetLayoutBinding lastRayCountShadeBinding{
       .binding = 3,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1,
-      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
 
-  VkDescriptorSetLayoutBinding pathStatesOutShadeBinding{
+  VkDescriptorSetLayoutBinding raysOutShadeBinding{
       .binding = 4,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
 
-  VkDescriptorSetLayoutBinding finalRadianceShadeBinding{
+  VkDescriptorSetLayoutBinding pathStatesOutShadeBinding{
       .binding = 5,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
 
-  VkDescriptorSetLayoutBinding nextRayCountShadeBinding{
+  VkDescriptorSetLayoutBinding finalRadianceShadeBinding{
       .binding = 6,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
 
-  VkDescriptorSetLayoutBinding layoutShadeBindings[7] = {
+  VkDescriptorSetLayoutBinding nextRayCountShadeBinding{
+      .binding = 7,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .descriptorCount = 1,
+      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT};
+
+  VkDescriptorSetLayoutBinding layoutShadeBindings[8] = {
       raysInShadeBinding,        pathStatesInShadeBinding,
-      hitRecordsShadeBinding,    raysOutShadeBinding,
-      pathStatesOutShadeBinding, finalRadianceShadeBinding,
-      nextRayCountShadeBinding};
+      hitRecordsShadeBinding,    lastRayCountShadeBinding,
+      raysOutShadeBinding,       pathStatesOutShadeBinding, 
+      finalRadianceShadeBinding, nextRayCountShadeBinding};
 
   VkDescriptorSetLayoutCreateInfo shadeSetInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 7,
+      .bindingCount = 8,
       .pBindings = layoutShadeBindings};
+
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &shadeSetInfo, nullptr,
                                        &_wavefrontShadeDescriptorSetLayout));
 
@@ -496,6 +517,7 @@ void Raytracer::createWavefrontDescriptors() {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 2,
       .pBindings = layoutDispatchBindings };
+
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &dispatchSetInfo, nullptr,
       &_wavefrontDispatchDescriptorSetLayout));
 
@@ -519,6 +541,7 @@ void Raytracer::createWavefrontDescriptors() {
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
       .bindingCount = 2,
       .pBindings = layoutFinalizeBindings};
+
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &finalizeSetInfo,
                                        nullptr,
                                        &_wavefrontFinalizeDescriptorSetLayout));
@@ -527,12 +550,12 @@ void Raytracer::createWavefrontDescriptors() {
   VkDescriptorPoolSize renderPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                       .descriptorCount = 2};
   VkDescriptorPoolSize buffersPoolSize{
-      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 25};
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 31};
 
   VkDescriptorPoolSize poolSizes[2] = {renderPoolSize, buffersPoolSize};
   VkDescriptorPoolCreateInfo poolInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
-      .maxSets = 7,
+      .maxSets = 8,
       .poolSizeCount = 2,
       .pPoolSizes = poolSizes};
 
@@ -577,7 +600,7 @@ void Raytracer::createWavefrontDescriptors() {
   VK_CHECK(vkAllocateDescriptorSets(_engine._device, &shadeDescriptorAllocInfo,
                                     &_wavefrontShadeDescriptorSets[1]));
 
-  // Dispatch
+  // Dispatch (needs 2 for the raycount buffer switching)
   VkDescriptorSetAllocateInfo dispatchDescriptorAllocInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
       .descriptorPool = _wavefrontDescriptorPool,
@@ -585,7 +608,10 @@ void Raytracer::createWavefrontDescriptors() {
       .pSetLayouts = &_wavefrontDispatchDescriptorSetLayout };
 
   VK_CHECK(vkAllocateDescriptorSets(_engine._device, &dispatchDescriptorAllocInfo,
-      &_wavefrontDispatchDescriptorSet));
+      &_wavefrontDispatchDescriptorSets[0]));
+
+  VK_CHECK(vkAllocateDescriptorSets(_engine._device, &dispatchDescriptorAllocInfo,
+      &_wavefrontDispatchDescriptorSets[1]));
 
   // Finalize
   VkDescriptorSetAllocateInfo finalizeDescriptorAllocInfo{
@@ -677,9 +703,22 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorExtendSceneBufferInfo0};
 
-  VkWriteDescriptorSet writeExtendSets0[3] = {
-      writeExtendRays0, writeExtendHitRecords0, writeExtendScene0};
-  vkUpdateDescriptorSets(_engine._device, 3, writeExtendSets0, 0, nullptr);
+  VkDescriptorBufferInfo descriptorExtendLastRayCountInfo0
+    { _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeExtendLastRayCount0{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontExtendDescriptorSets[0],
+      .dstBinding = 3,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorExtendLastRayCountInfo0 };
+
+  VkWriteDescriptorSet writeExtendSets0[4] = {
+      writeExtendRays0, writeExtendHitRecords0, 
+      writeExtendScene0, writeExtendLastRayCount0 };
+  vkUpdateDescriptorSets(_engine._device, 4, writeExtendSets0, 0, nullptr);
 
   // Extend 1
   VkDescriptorBufferInfo descriptorExtendRaysBufferInfo1{
@@ -718,9 +757,22 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorExtendSceneBufferInfo1};
 
-  VkWriteDescriptorSet writeExtendSets1[3] = {
-      writeExtendRays1, writeExtendHitRecords1, writeExtendScene1};
-  vkUpdateDescriptorSets(_engine._device, 3, writeExtendSets1, 0, nullptr);
+  VkDescriptorBufferInfo descriptorExtendLastRayCountInfo1
+    { _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE };
+
+  VkWriteDescriptorSet writeExtendLastRayCount1{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontExtendDescriptorSets[1],
+      .dstBinding = 3,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorExtendLastRayCountInfo1 };
+
+  VkWriteDescriptorSet writeExtendSets1[4] = {
+      writeExtendRays1, writeExtendHitRecords1, 
+      writeExtendScene1, writeExtendLastRayCount1 };
+  vkUpdateDescriptorSets(_engine._device, 4, writeExtendSets1, 0, nullptr);
 
   // Shade 0
   VkDescriptorBufferInfo descriptorShadeRaysInBufferInfo0{
@@ -759,13 +811,25 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeHitRecordBufferInfo0};
 
+  VkDescriptorBufferInfo descriptorShadeLastRayCountBufferInfo0{
+      _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeShadeLastRayCount0{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontShadeDescriptorSets[0],
+      .dstBinding = 3,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorShadeLastRayCountBufferInfo0 };
+
   VkDescriptorBufferInfo descriptorShadeRaysOutBufferInfo0{
-      _wavefrontRayBuffers[1], 0, VK_WHOLE_SIZE};
+      _wavefrontRayBuffers[1], 0, VK_WHOLE_SIZE };
 
   VkWriteDescriptorSet writeShadeRaysOut0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[0],
-      .dstBinding = 3,
+      .dstBinding = 4,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -777,7 +841,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeShadePathStatesOut0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[0],
-      .dstBinding = 4,
+      .dstBinding = 5,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -789,30 +853,30 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeShadeFinalRadiance0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[0],
-      .dstBinding = 5,
+      .dstBinding = 6,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeFinalRadianceBufferInfo0};
 
   VkDescriptorBufferInfo descriptorShadeNextRayCountBufferInfo0{
-      _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE};
+      _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE};
 
   VkWriteDescriptorSet writeShadeNextRayCount0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[0],
-      .dstBinding = 6,
+      .dstBinding = 7,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeNextRayCountBufferInfo0};
 
-  VkWriteDescriptorSet writeShadeSets0[7] = {
+  VkWriteDescriptorSet writeShadeSets0[8] = {
       writeShadeRaysIn0,        writeShadePathStatesIn0,
-      writeShadeHitRecord0,     writeShadeRaysOut0,
-      writeShadePathStatesOut0, writeShadeFinalRadiance0,
-      writeShadeNextRayCount0};
-  vkUpdateDescriptorSets(_engine._device, 7, writeShadeSets0, 0, nullptr);
+      writeShadeHitRecord0,     writeShadeLastRayCount0,
+      writeShadeRaysOut0,       writeShadePathStatesOut0,
+      writeShadeFinalRadiance0, writeShadeNextRayCount0};
+  vkUpdateDescriptorSets(_engine._device, 8, writeShadeSets0, 0, nullptr);
 
   // Shade 1
   VkDescriptorBufferInfo descriptorShadeRaysInBufferInfo1{
@@ -851,13 +915,25 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeHitRecordBufferInfo1};
 
+  VkDescriptorBufferInfo descriptorShadeLastRayCountBufferInfo1{
+      _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE };
+
+  VkWriteDescriptorSet writeShadeLastRayCount1{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontShadeDescriptorSets[1],
+      .dstBinding = 3,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorShadeLastRayCountBufferInfo1 };
+
   VkDescriptorBufferInfo descriptorShadeRaysOutBufferInfo1{
-      _wavefrontRayBuffers[0], 0, VK_WHOLE_SIZE};
+      _wavefrontRayBuffers[0], 0, VK_WHOLE_SIZE };
 
   VkWriteDescriptorSet writeShadeRaysOut1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[1],
-      .dstBinding = 3,
+      .dstBinding = 4,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -869,7 +945,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeShadePathStatesOut1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[1],
-      .dstBinding = 4,
+      .dstBinding = 5,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -881,63 +957,92 @@ void Raytracer::createWavefrontDescriptors() {
   VkWriteDescriptorSet writeShadeFinalRadiance1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[1],
-      .dstBinding = 5,
+      .dstBinding = 6,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeFinalRadianceBufferInfo1};
 
   VkDescriptorBufferInfo descriptorShadeNextRayCountBufferInfo1{
-      _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE};
+      _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
 
   VkWriteDescriptorSet writeShadeNextRayCount1{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
       .dstSet = _wavefrontShadeDescriptorSets[1],
-      .dstBinding = 6,
+      .dstBinding = 7,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorShadeNextRayCountBufferInfo1};
 
-  VkWriteDescriptorSet writeShadeSets1[7] = {
+  VkWriteDescriptorSet writeShadeSets1[8] = {
       writeShadeRaysIn1,        writeShadePathStatesIn1,
-      writeShadeHitRecord1,     writeShadeRaysOut1,
-      writeShadePathStatesOut1, writeShadeFinalRadiance1,
-      writeShadeNextRayCount1};
-  vkUpdateDescriptorSets(_engine._device, 7, writeShadeSets1, 0, nullptr);
+      writeShadeHitRecord1,     writeShadeLastRayCount1,
+      writeShadeRaysOut1,       writeShadePathStatesOut1, 
+      writeShadeFinalRadiance1, writeShadeNextRayCount1};
+  vkUpdateDescriptorSets(_engine._device, 8, writeShadeSets1, 0, nullptr);
 
-  // Dispatch
-  VkDescriptorBufferInfo descriptorDispatchNextRayCountBufferInfo{
-      _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE };
+  // Dispatch 0
+  VkDescriptorBufferInfo descriptorDispatchNextRayCountBufferInfo0{
+      _wavefrontNextRayCountBuffers[1], 0, VK_WHOLE_SIZE};
 
-  VkWriteDescriptorSet writeDispatchNextRayCount{
+  VkWriteDescriptorSet writeDispatchNextRayCount0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstSet = _wavefrontDispatchDescriptorSet,
+      .dstSet = _wavefrontDispatchDescriptorSets[0],
       .dstBinding = 0,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      .pBufferInfo = &descriptorDispatchNextRayCountBufferInfo };
+      .pBufferInfo = &descriptorDispatchNextRayCountBufferInfo0 };
 
-  VkDescriptorBufferInfo descriptorDispatchDispatchBufferInfo{
+  VkDescriptorBufferInfo descriptorDispatchDispatchBufferInfo0{
       _wavefrontDispatchBuffer, 0, VK_WHOLE_SIZE };
 
-  VkWriteDescriptorSet writeDispatchDispatch{
+  VkWriteDescriptorSet writeDispatchDispatch0{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstSet = _wavefrontDispatchDescriptorSet,
+      .dstSet = _wavefrontDispatchDescriptorSets[0],
       .dstBinding = 1,
       .dstArrayElement = 0,
       .descriptorCount = 1,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      .pBufferInfo = &descriptorDispatchDispatchBufferInfo };
+      .pBufferInfo = &descriptorDispatchDispatchBufferInfo0 };
 
-  VkWriteDescriptorSet writeDispatchSets[2] = {
-      writeDispatchNextRayCount, writeDispatchDispatch };
-  vkUpdateDescriptorSets(_engine._device, 2, writeDispatchSets, 0, nullptr);
+  VkWriteDescriptorSet writeDispatchSets0[2] = {
+      writeDispatchNextRayCount0, writeDispatchDispatch0 };
+  vkUpdateDescriptorSets(_engine._device, 2, writeDispatchSets0, 0, nullptr);
+
+  // Dispatch 1
+  VkDescriptorBufferInfo descriptorDispatchNextRayCountBufferInfo1{
+      _wavefrontNextRayCountBuffers[0], 0, VK_WHOLE_SIZE};
+
+  VkWriteDescriptorSet writeDispatchNextRayCount1{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontDispatchDescriptorSets[1],
+      .dstBinding = 0,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorDispatchNextRayCountBufferInfo1 };
+
+  VkDescriptorBufferInfo descriptorDispatchDispatchBufferInfo1{
+      _wavefrontDispatchBuffer, 0, VK_WHOLE_SIZE };
+
+  VkWriteDescriptorSet writeDispatchDispatch1{
+      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+      .dstSet = _wavefrontDispatchDescriptorSets[1],
+      .dstBinding = 1,
+      .dstArrayElement = 0,
+      .descriptorCount = 1,
+      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+      .pBufferInfo = &descriptorDispatchDispatchBufferInfo1 };
+
+  VkWriteDescriptorSet writeDispatchSets1[2] = {
+      writeDispatchNextRayCount1, writeDispatchDispatch1 };
+  vkUpdateDescriptorSets(_engine._device, 2, writeDispatchSets1, 0, nullptr);
 
   // Finalize
   VkDescriptorImageInfo descriptorFinalizeImageInfo{
-      .imageView = _renderTargetView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL};
+      .imageView = _renderTargetView, .imageLayout = VK_IMAGE_LAYOUT_GENERAL };
 
   VkWriteDescriptorSet writeFinalizeRender{
       .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -1186,9 +1291,10 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                   0);
 
   // Fill correct value into dispatch buffer for first extend
-  vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE,
+  vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffers[0], 0,
+                  VK_WHOLE_SIZE,
                   _engine._windowExtent.width * _engine._windowExtent.height *
-                      10); // Samples = 10
+                      1); // Samples = 1
 
   vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
@@ -1197,13 +1303,13 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                           _wavefrontDispatchLayout, 0, 1,
-                          &_wavefrontDispatchDescriptorSet, 0, nullptr);
+                          &_wavefrontDispatchDescriptorSets[1], 0, nullptr);
 
   vkCmdDispatch(computeCmd, 1, 1, 1);
 
   // Extend and Shade loop
-  // MAX BOUNCES = 10
-  for (int i = 0; i < 10; i += 2) {
+  // MAX BOUNCES = 20
+  for (int i = 0; i < 20; i += 2) {
     // Memory barrier either between generate or shade and extend
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
@@ -1218,8 +1324,8 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
 
     // Reset ray count
-    vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE,
-                    0);
+    vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffers[1], 0,
+                    VK_WHOLE_SIZE, 0);
 
     // Memory barrier between extend 1 and shade 1
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
@@ -1243,7 +1349,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
     vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _wavefrontDispatchLayout, 0, 1,
-                            &_wavefrontDispatchDescriptorSet, 0, nullptr);
+                            &_wavefrontDispatchDescriptorSets[0], 0, nullptr);
 
     vkCmdDispatch(computeCmd, 1, 1, 1);
 
@@ -1261,8 +1367,8 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
 
     // Reset ray count
-    vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffer, 0, VK_WHOLE_SIZE,
-                    0);
+    vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffers[0], 0,
+                    VK_WHOLE_SIZE, 0);
 
     // Memory barrier between extend 1 and shade 1
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
@@ -1286,7 +1392,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
     vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                             _wavefrontDispatchLayout, 0, 1,
-                            &_wavefrontDispatchDescriptorSet, 0, nullptr);
+                            &_wavefrontDispatchDescriptorSets[1], 0, nullptr);
 
     vkCmdDispatch(computeCmd, 1, 1, 1);
   }

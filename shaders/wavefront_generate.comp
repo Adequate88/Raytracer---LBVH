@@ -4,7 +4,7 @@
 #include "ray.glsl"
 #include "path_state.glsl"
 
-const int SAMPLES = 10;
+const int SAMPLES = 1;
 
 layout(local_size_x = 16, local_size_y = 16) in;
 layout(push_constant) uniform Camera {
@@ -25,20 +25,25 @@ layout(binding = 2, std430) writeonly buffer PathStateBuffer {
   PathState states[];
 } path_state_out;
 
+float noise3D(float x, float y, float z) {
+  return fract(sin(x * 112.9898f + y * 179.233f + z * 237.212f) * 43758.5453f);
+}
+
 void main() {
   ivec2 thread = ivec2(gl_GlobalInvocationID.xy);
   ivec2 imgSize = imageSize(img);
+  float jx = noise3D(float(thread.x), float(thread.y), +0.5) - 0.5;
+  float jy = noise3D(float(thread.x), float(thread.y), +0.91) - 0.5;
+  vec3 pixel_pos = cam.pixel00_loc.xyz
+      + (float(thread.x) + jx) * cam.pixel_delta_u.xyz
+      + (float(thread.y) + jy) * cam.pixel_delta_v.xyz;
 
   if (thread.x < imgSize.x && thread.y < imgSize.y) {
-    vec3 pixel_pos = cam.pixel00_loc.xyz +
-      float(thread.x) * cam.pixel_delta_u.xyz +
-      float(thread.y) * cam.pixel_delta_v.xyz;
-
-    vec3 ray_dir = normalize(pixel_pos - cam.center.xyz);
-
     int pixel_index = thread.y * imgSize.x + thread.x;
 
     for (int s = 0; s < SAMPLES; s++) {
+      vec3 ray_dir = normalize(pixel_pos - cam.center.xyz);
+
       int sample_index = pixel_index * SAMPLES + s;
       ray_out.rays[sample_index].origin = cam.center.xyz;
       ray_out.rays[sample_index].dir = ray_dir;

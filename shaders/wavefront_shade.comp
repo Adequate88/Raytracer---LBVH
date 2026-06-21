@@ -5,7 +5,7 @@
 #include "ray.glsl"
 #include "path_state.glsl"
 
-const int MAX_BOUNCES = 10;
+const int MAX_BOUNCES = 20;
 const float PI = 3.14159;
 
 layout(local_size_x = 256) in;
@@ -23,20 +23,24 @@ layout(binding = 2, std430) readonly buffer HitRecordsBuffer {
   hit_record records[];
 } hit_records;
 
+layout(binding = 3, std430) readonly buffer LastRayCountBuffer {
+  uint count;
+} last_ray_count;
+
 // OUT BUFFERS
-layout(binding = 3, std430) writeonly buffer RaysOutBuffer {
+layout(binding = 4, std430) writeonly buffer RaysOutBuffer {
   Ray rays[];
 } ray_out;
 
-layout(binding = 4, std430) writeonly buffer PathStatesOutBuffer {
+layout(binding = 5, std430) writeonly buffer PathStatesOutBuffer {
   PathState states[];
 } path_state_out;
 
-layout(binding = 5, std430) writeonly buffer FinalRadianceBuffer {
+layout(binding = 6, std430) writeonly buffer FinalRadianceBuffer {
   vec3 radiance[];
 } final_radiance;
 
-layout(binding = 6, std430) buffer NextRayCountBuffer {
+layout(binding = 7, std430) buffer NextRayCountBuffer {
   uint count;
 } next_ray_count;
 
@@ -47,14 +51,14 @@ float noise3D(float x, float y, float z) {
 void main() {
   int thread = int(gl_GlobalInvocationID.x);
 
-  if (thread < path_state_in.states.length()) {
+  if (thread < last_ray_count.count) {
     Ray ray = ray_in.rays[thread];
     hit_record rec = hit_records.records[thread];
     PathState state = path_state_in.states[thread];
 
-    vec3 BRDF = vec3(0.4, 0.6, 0.4) / PI;
+    vec3 BRDF = vec3(0.4, 0.6, 0.4); // / PI;
     float hemiPDF = 1.0 / (PI * 2.0f);
-    vec3 background_color = vec3(0.7, 0.6, 1.0);
+    vec3 background_color = vec3(0.7, 0.8, 1.0);
     vec3 light_dir = normalize(vec3(1.0, 2.0, 3.0));
 
     // Miss
@@ -64,10 +68,11 @@ void main() {
       return;
     }
 
-    // Compute radiance from light 
-    // (also to use in case max bounces would be reached next iteration)
-    vec3 radiance = state.radiance + 
-      0.5 * state.throughput * BRDF * max(dot(rec.normal, light_dir), 0.0);
+    // Light
+    // vec3 radiance = state.radiance +
+    //   0.5 * state.throughput * BRDF * max(dot(rec.normal, light_dir), 0.0);
+    // Removed light contribution to stay consistent with the CPU tracer / baseline
+    vec3 radiance = state.radiance;
 
     // Exceeded max bounces
     if (state.bounce + 1 >= MAX_BOUNCES) {
@@ -88,8 +93,9 @@ void main() {
     ray_out.rays[out_idx].origin = rec.p;
     ray_out.rays[out_idx].dir = new_ray_dir;
 
-    path_state_out.states[out_idx].throughput = 
-      state.throughput * (max(dot(rec.normal, new_ray_dir), 0.0) / hemiPDF) * BRDF;
+    path_state_out.states[out_idx].throughput =
+      state.throughput * BRDF; // (max(dot(rec.normal, new_ray_dir), 0.0) / hemiPDF) * BRDF;
+    // Removed hemisphere pdf cause its not in the CPU tracer, that way images are consistent
     path_state_out.states[out_idx].radiance = radiance;
     path_state_out.states[out_idx].og_path_idx = state.og_path_idx;
     path_state_out.states[out_idx].bounce = state.bounce + 1;
