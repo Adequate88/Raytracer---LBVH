@@ -46,7 +46,7 @@ int main() {
 #ifdef RGP_CAPTURE
   auto present_once = [&]() {
     uint32_t idx = engine.begin_frame();
-    raytracer.recordBuffer(idx);
+    raytracer.recordWavefrontBuffer(idx);
     engine.end_frame(idx);
   };
 

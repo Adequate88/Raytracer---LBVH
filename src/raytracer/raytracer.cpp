@@ -1296,6 +1296,23 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   VK_CHECK(vkBeginCommandBuffer(computeCmd, &beginInfo));
 
+  auto pfnBeginLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(
+      _engine._instance, "vkCmdBeginDebugUtilsLabelEXT");
+  auto pfnEndLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(
+      _engine._instance, "vkCmdEndDebugUtilsLabelEXT");
+
+  auto beginLabel = [&](const char *name) {
+    if (pfnBeginLabel) {
+      VkDebugUtilsLabelEXT label{
+          .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT, .pLabelName = name};
+      pfnBeginLabel(computeCmd, &label);
+    }
+  };
+  auto endLabel = [&]() {
+    if (pfnEndLabel)
+      pfnEndLabel(computeCmd);
+  };
+
   vkCmdResetQueryPool(computeCmd, _timestampPool, 0, 2);
 
   vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
@@ -1312,6 +1329,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
       VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
+  beginLabel("Generate");
   vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                     _wavefrontGeneratePipeline);
 
@@ -1321,6 +1339,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   vkCmdDispatch(computeCmd, (_engine._windowExtent.width + 15) / 16,
                 (_engine._windowExtent.height + 15) / 16, 1);
+  endLabel();
 
   vkCmdFillBuffer(computeCmd, _wavefrontFinalRadianceBuffer, 0, VK_WHOLE_SIZE,
                   0);
@@ -1333,6 +1352,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
+  beginLabel("Dispatch");
   vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                     _wavefrontDispatchPipeline);
 
@@ -1341,6 +1361,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                           &_wavefrontDispatchDescriptorSets[1], 0, nullptr);
 
   vkCmdDispatch(computeCmd, 1, 1, 1);
+  endLabel();
 
   // Extend and Shade loop
   // MAX BOUNCES = 20
@@ -1349,6 +1370,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Extend 1
+    beginLabel("Extend");
     vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _wavefrontExtendPipeline);
 
@@ -1357,6 +1379,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             &_wavefrontExtendDescriptorSets[0], 0, nullptr);
 
     vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
+    endLabel();
 
     // Reset ray count
     vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffers[1], 0,
@@ -1366,6 +1389,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Shade 1
+    beginLabel("Shade");
     vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _wavefrontShadePipeline);
 
@@ -1374,11 +1398,13 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             &_wavefrontShadeDescriptorSets[0], 0, nullptr);
 
     vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
+    endLabel();
 
     // Memory barrier between shade 1 and dispatch 1
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Dispatch 1
+    beginLabel("Dispatch");
     vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _wavefrontDispatchPipeline);
 
@@ -1387,11 +1413,13 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             &_wavefrontDispatchDescriptorSets[0], 0, nullptr);
 
     vkCmdDispatch(computeCmd, 1, 1, 1);
+    endLabel();
 
     // Memory barrier between dispatch 1 and extend 2
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Extend 2
+    beginLabel("Extend");
     vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _wavefrontExtendPipeline);
 
@@ -1400,6 +1428,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             &_wavefrontExtendDescriptorSets[1], 0, nullptr);
 
     vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
+    endLabel();
 
     // Reset ray count
     vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffers[0], 0,
@@ -1409,6 +1438,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Shade 2
+    beginLabel("Shade");
     vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _wavefrontShadePipeline);
 
@@ -1417,11 +1447,13 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             &_wavefrontShadeDescriptorSets[1], 0, nullptr);
 
     vkCmdDispatchIndirect(computeCmd, _wavefrontDispatchBuffer, 0);
+    endLabel();
 
     // Memory barrier between shade 2 and dispatch 2
     vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 
     // Dispatch 2
+    beginLabel("Dispatch");
     vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _wavefrontDispatchPipeline);
 
@@ -1430,6 +1462,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
                             &_wavefrontDispatchDescriptorSets[1], 0, nullptr);
 
     vkCmdDispatch(computeCmd, 1, 1, 1);
+    endLabel();
   }
 
   // Memory barrier between shade and finalize
@@ -1442,6 +1475,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
       VK_ACCESS_2_SHADER_WRITE_BIT, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
       VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT);
 
+  beginLabel("Finalize");
   vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
                     _wavefrontFinalizePipeline);
 
@@ -1451,6 +1485,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   vkCmdDispatch(computeCmd, (_engine._windowExtent.width + 15) / 16,
                 (_engine._windowExtent.height + 15) / 16, 1);
+  endLabel();
 
   vkCmdWriteTimestamp2(computeCmd, VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
                        _timestampPool, 1);
