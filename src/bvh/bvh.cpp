@@ -67,8 +67,18 @@ void Bvh::build() {
   } pc{(int32_t)_primitiveCount, -1, (int32_t)numBlocks,
        (int32_t)histogramElems};
 
+  auto pfnBeginLabel = (PFN_vkCmdBeginDebugUtilsLabelEXT)vkGetInstanceProcAddr(
+      _engine._instance, "vkCmdBeginDebugUtilsLabelEXT");
+  auto pfnEndLabel = (PFN_vkCmdEndDebugUtilsLabelEXT)vkGetInstanceProcAddr(
+      _engine._instance, "vkCmdEndDebugUtilsLabelEXT");
+
   auto dispatch = [&](uint32_t pipelineIdx, VkDescriptorSet set,
-                      uint32_t groupCount) {
+                      uint32_t groupCount, const char *name) {
+    VkDebugUtilsLabelEXT label{.sType =
+                                   VK_STRUCTURE_TYPE_DEBUG_UTILS_LABEL_EXT,
+                               .pLabelName = name};
+    if (pfnBeginLabel)
+      pfnBeginLabel(buildCommandBuffer, &label);
     vkCmdBindPipeline(buildCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                       _bvhPipelines[pipelineIdx]);
     vkCmdBindDescriptorSets(buildCommandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
@@ -95,6 +105,8 @@ void Bvh::build() {
                          .memoryBarrierCount = 1,
                          .pMemoryBarriers = &barrier};
     vkCmdPipelineBarrier2(buildCommandBuffer, &dep);
+    if (pfnEndLabel)
+      pfnEndLabel(buildCommandBuffer);
   };
 
   uint32_t primGroups = (_primitiveCount + 255) / 256;
@@ -103,25 +115,25 @@ void Bvh::build() {
   vkCmdPushConstants(buildCommandBuffer, _bvhPipelineLayout,
                      VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
 
-  dispatch(0, _bvhDescriptors[0], primGroups); // init_prim_bboxes
-  dispatch(1, _bvhDescriptors[0], 1);          // create_world_bbox
-  dispatch(2, _bvhDescriptors[0], primGroups); // compute_morton_codes
+  dispatch(0, _bvhDescriptors[0], primGroups, "init_prim_bboxes");
+  dispatch(1, _bvhDescriptors[0], 1, "create_world_bbox");
+  dispatch(2, _bvhDescriptors[0], primGroups, "compute_morton_codes");
 
   for (int pass = 0; pass < 8; pass++) {
     pc.pass_idx = pass;
     vkCmdPushConstants(buildCommandBuffer, _bvhPipelineLayout,
                        VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(pc), &pc);
     VkDescriptorSet set = _bvhDescriptors[pass % 2];
-    dispatch(3, set, (uint32_t)groups);    // create_histogram
-    dispatch(4, set, (uint32_t)numBlocks); // prefix_sum
-    dispatch(5, set, 1);                   // scan_global_sum
-    dispatch(6, set, (uint32_t)numBlocks); // add_global_sums
-    dispatch(7, set, (uint32_t)groups);    // scatter
+    dispatch(3, set, (uint32_t)groups, "create_histogram");
+    dispatch(4, set, (uint32_t)numBlocks, "prefix_sum");
+    dispatch(5, set, 1, "scan_global_sum");
+    dispatch(6, set, (uint32_t)numBlocks, "add_global_sums");
+    dispatch(7, set, (uint32_t)groups, "scatter");
   }
 
-  dispatch(8, _bvhDescriptors[0], primGroups);     // init_prim_nodes
-  dispatch(9, _bvhDescriptors[0], internalGroups); // create_bvh_hierarchy
-  dispatch(10, _bvhDescriptors[0], primGroups);    // build_bboxes
+  dispatch(8, _bvhDescriptors[0], primGroups, "init_prim_nodes");
+  dispatch(9, _bvhDescriptors[0], internalGroups, "create_bvh_hierarchy");
+  dispatch(10, _bvhDescriptors[0], primGroups, "build_bboxes");
 
   VK_CHECK(vkEndCommandBuffer(buildCommandBuffer));
 

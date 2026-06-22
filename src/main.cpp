@@ -42,6 +42,24 @@ int main() {
   raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),
                           bvh.bvhBufferHandle());
 
+#ifdef RGP_CAPTURE
+  auto present_once = [&]() {
+    uint32_t idx = engine.begin_frame();
+    raytracer.recordBuffer(idx);
+    engine.end_frame(idx);
+  };
+
+  present_once();
+
+  bvh.build();
+  present_once();
+
+  raytracer.forceRerender();
+  present_once();
+
+  VK_CHECK(vkDeviceWaitIdle(engine._device));
+#endif
+
   METRIC_BENCHMARK(100, 10, bvh.build());
 
   METRIC_SET_VALUE("Ray Count",
