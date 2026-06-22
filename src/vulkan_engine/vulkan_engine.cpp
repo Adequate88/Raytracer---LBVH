@@ -132,6 +132,10 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
   uint32_t instanceExtensionCount = 0;
   auto instanceExtensions =
       SDL_Vulkan_GetInstanceExtensions(&instanceExtensionCount);
+
+  std::vector<const char *> enabledInstanceExtensions(
+      instanceExtensions, instanceExtensions + instanceExtensionCount);
+  enabledInstanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
   // Instance
   VkApplicationInfo appInfo{.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
                             .pApplicationName = "Raytracer",
@@ -145,8 +149,9 @@ void VulkanEngine::init_vulkan() { // NOTE : Functions written in big chunks
       .pApplicationInfo = &appInfo,
       .enabledLayerCount = static_cast<uint32_t>(requiredLayers.size()),
       .ppEnabledLayerNames = requiredLayers.data(),
-      .enabledExtensionCount = instanceExtensionCount,
-      .ppEnabledExtensionNames = instanceExtensions};
+      .enabledExtensionCount =
+          static_cast<uint32_t>(enabledInstanceExtensions.size()),
+      .ppEnabledExtensionNames = enabledInstanceExtensions.data()};
 
   VK_CHECK(vkCreateInstance(&createInfo, nullptr, &_instance));
 

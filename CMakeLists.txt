@@ -26,6 +26,11 @@ if(EVALUATE)
   add_compile_definitions(EVALUATE)
 endif()
 
+option(RGP_CAPTURE "Emit deterministic RGP/RADV SQTT capture frames at startup" OFF)
+if(RGP_CAPTURE)
+  add_compile_definitions(RGP_CAPTURE)
+endif()
+
 add_subdirectory(external)
 add_subdirectory(src)
 
