@@ -17,9 +17,8 @@ struct node {
   int pad_to_64[3]; // Vec4 has alignment of 16 bytes, so node has alignment of 16 bytes, so to ensure correct reads we need sizeof(node) % 16 == 0.
 };
 
-bool aabb_hit(vec3 ray_origin, vec3 ray_dir, float t_curr_min,
+bool aabb_hit(vec3 ray_origin, vec3 adinv, float t_curr_min,
   vec3 aabb_min, vec3 aabb_max) {
-  vec3 adinv = 1.0f / ray_dir; // TODO: replace with precomputed argument
 
   vec3 t0 = (aabb_min - ray_origin) * adinv;
   vec3 t1 = (aabb_max - ray_origin) * adinv;
@@ -56,6 +55,8 @@ bool bvh_hit(vec3 ray_origin, vec3 ray_dir, out hit_record rec) {
   rec.t = 1e30;
   bool found_hit = false;
 
+  vec3 ray_dir_inv = 1.0f / ray_dir;
+
   // Traverse
   do {
     // temporarily loading current node into this register, to avoid loading it twice
@@ -68,7 +69,7 @@ bool bvh_hit(vec3 ray_origin, vec3 ray_dir, out hit_record rec) {
     node child_r = bvh.nodes[curr_right_idx];
 
     // Process left child
-    bool hit = aabb_hit(ray_origin, ray_dir, rec.t, 
+    bool hit = aabb_hit(ray_origin, ray_dir_inv, rec.t, 
       min(child_l.bbox.corner1, child_l.bbox.corner2).xyz,  // child min
       max(child_l.bbox.corner1, child_l.bbox.corner2).xyz); // child max
     bool traverse_l = (hit && child_l.primitive_id < 0);
@@ -82,7 +83,7 @@ bool bvh_hit(vec3 ray_origin, vec3 ray_dir, out hit_record rec) {
     }
 
     // Process right child
-    hit = aabb_hit(ray_origin, ray_dir, rec.t, 
+    hit = aabb_hit(ray_origin, ray_dir_inv, rec.t, 
       min(child_r.bbox.corner1, child_r.bbox.corner2).xyz,  // child min
       max(child_r.bbox.corner1, child_r.bbox.corner2).xyz); // child max
     bool traverse_r = (hit && child_r.primitive_id < 0);
