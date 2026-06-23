@@ -7,6 +7,8 @@
 
 #include <vulkan/vulkan_core.h>
 
+#define SAMPLES 10
+
 Raytracer::Raytracer(VulkanEngine &engine) : _engine(engine) {}
 
 void Raytracer::initRaytracer(const void *cameraData, VkBuffer sceneBuffer,
@@ -313,9 +315,8 @@ void Raytracer::recordRenderTime() {
 
 // Wavefront
 void Raytracer::createWavefrontBuffers() {
-  // SAMPLES = 1
   const VkDeviceSize nrOfPaths =
-      _engine._windowExtent.width * _engine._windowExtent.height * 1;
+      _engine._windowExtent.width * _engine._windowExtent.height * SAMPLES;
 
   // Ray buffers
   _engine.allocate_buffer(
@@ -1348,7 +1349,7 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
   vkCmdFillBuffer(computeCmd, _wavefrontNextRayCountBuffers[0], 0,
                   VK_WHOLE_SIZE,
                   _engine._windowExtent.width * _engine._windowExtent.height *
-                      1); // Samples = 1
+                      SAMPLES);
 
   vkCmdPipelineBarrier2(computeCmd, &_wavefrontMemoryDependency);
 

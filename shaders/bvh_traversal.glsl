@@ -39,7 +39,7 @@ layout(binding = 1, std430) readonly buffer SceneBuffer {
 
 // END OF DUPLICATED CODE BLOCK
 
-const int BVH_STACK_SIZE = 64;
+const int BVH_STACK_SIZE = 32;
 
 // layout(push_constant) uniform Camera {} cam;
 
@@ -58,25 +58,21 @@ bool bvh_hit(vec3 ray_origin, vec3 ray_dir, out hit_record rec) {
 
   // Traverse
   do {
-    node curr_node = bvh.nodes[stack[stack_ptr]];
+    // temporarily loading current node into this register, to avoid loading it twice
+    node child_l = bvh.nodes[stack[stack_ptr]];
 
-    node child_l = bvh.nodes[curr_node.left];
-    node child_r = bvh.nodes[curr_node.right];
+    int curr_left_idx = child_l.left;
+    int curr_right_idx = child_l.right;
 
-    // Intersection with bounding boxes of nodes
-    vec3 child_l_min = min(child_l.bbox.corner1, child_l.bbox.corner2).xyz;
-    vec3 child_l_max = max(child_l.bbox.corner1, child_l.bbox.corner2).xyz;
-    bool hit_l = aabb_hit(
-        ray_origin, ray_dir, rec.t,
-        child_l_min, child_l_max);
-    vec3 child_r_min = min(child_r.bbox.corner1, child_r.bbox.corner2).xyz;
-    vec3 child_r_max = max(child_r.bbox.corner1, child_r.bbox.corner2).xyz;
-    bool hit_r = aabb_hit(
-        ray_origin, ray_dir, rec.t,
-        child_r_min, child_r_max);
+    child_l = bvh.nodes[curr_left_idx];
+    node child_r = bvh.nodes[curr_right_idx];
 
-    // If these are leaf nodes, intersect with their triangles
-    if (hit_l && child_l.primitive_id >= 0) {
+    // Process left child
+    bool hit = aabb_hit(ray_origin, ray_dir, rec.t, 
+      min(child_l.bbox.corner1, child_l.bbox.corner2).xyz,  // child min
+      max(child_l.bbox.corner1, child_l.bbox.corner2).xyz); // child max
+    bool traverse_l = (hit && child_l.primitive_id < 0);
+    if (hit && child_l.primitive_id >= 0) {
       hit_record temp_rec;
       if (intersect_triangle(ray_origin, ray_dir, rec.t,
           scene.triangles[child_l.primitive_id], temp_rec)) {
@@ -84,7 +80,13 @@ bool bvh_hit(vec3 ray_origin, vec3 ray_dir, out hit_record rec) {
         found_hit = true;
       }
     }
-    if (hit_r && child_r.primitive_id >= 0) {
+
+    // Process right child
+    hit = aabb_hit(ray_origin, ray_dir, rec.t, 
+      min(child_r.bbox.corner1, child_r.bbox.corner2).xyz,  // child min
+      max(child_r.bbox.corner1, child_r.bbox.corner2).xyz); // child max
+    bool traverse_r = (hit && child_r.primitive_id < 0);
+    if (hit && child_r.primitive_id >= 0) {
       hit_record temp_rec;
       if (intersect_triangle(ray_origin, ray_dir, rec.t,
           scene.triangles[child_r.primitive_id], temp_rec)) {
@@ -92,19 +94,15 @@ bool bvh_hit(vec3 ray_origin, vec3 ray_dir, out hit_record rec) {
         found_hit = true;
       }
     }
-
-    // If these are not leaf nodes, traverse the nodes
-    bool traverse_l = (hit_l && child_l.primitive_id < 0);
-    bool traverse_r = (hit_r && child_r.primitive_id < 0);
-
+    
     if (!traverse_l && !traverse_r) {
       stack_ptr--;
     }
     else {
-      stack[stack_ptr] = (traverse_l) ? curr_node.left : curr_node.right;
+      stack[stack_ptr] = (traverse_l) ? curr_left_idx : curr_right_idx;
       if (traverse_l && traverse_r) {
         stack_ptr++;
-        stack[stack_ptr] = curr_node.right;
+        stack[stack_ptr] = curr_right_idx;
       }
     }
   }
