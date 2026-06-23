@@ -43,21 +43,22 @@ int main() {
                           bvh.bvhBufferHandle());
 
 #ifdef RGP_CAPTURE
-  auto present_once = [&]() {
+  {
     uint32_t idx = engine.begin_frame();
     raytracer.recordBuffer(idx);
     engine.end_frame(idx);
-  };
-
-  present_once();
+  }
 
   bvh.build();
-  present_once();
-
-  raytracer.forceRerender();
-  present_once();
+  {
+    uint32_t idx = engine.begin_frame();
+    raytracer.forceRerender();
+    raytracer.recordBuffer(idx);
+    engine.end_frame(idx);
+  }
 
   VK_CHECK(vkDeviceWaitIdle(engine._device));
+  return 0;
 #endif
 
   METRIC_BENCHMARK(100, 10, bvh.build());
