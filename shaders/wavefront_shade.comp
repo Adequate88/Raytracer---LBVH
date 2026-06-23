@@ -56,15 +56,14 @@ void main() {
     hit_record rec = hit_records.records[thread];
     PathState state = path_state_in.states[thread];
 
-    vec3 BRDF = vec3(0.4, 0.6, 0.4); // / PI;
-    float hemiPDF = 1.0 / (PI * 2.0f);
-    vec3 background_color = vec3(0.7, 0.8, 1.0);
-    vec3 light_dir = normalize(vec3(1.0, 2.0, 3.0));
+    // float hemiPDF = 1.0 / (PI * 2.0f);               // Not used later on
+    // vec3 light_dir = normalize(vec3(1.0, 2.0, 3.0)); // Not used later on
 
     // Miss
     if (rec.t >= 1e30) {
       final_radiance.radiance[state.og_path_idx] = 
-        state.radiance + state.throughput * background_color;
+        state.radiance + state.throughput * 
+        vec3(0.7, 0.8, 1.0); // background color
       return;
     }
 
@@ -72,21 +71,24 @@ void main() {
     // vec3 radiance = state.radiance +
     //   0.5 * state.throughput * BRDF * max(dot(rec.normal, light_dir), 0.0);
     // Removed light contribution to stay consistent with the CPU tracer / baseline
-    vec3 radiance = state.radiance;
+    // vec3 radiance = state.radiance;                  // Not used later on
 
     // Exceeded max bounces
     if (state.bounce + 1 >= MAX_BOUNCES) {
-      final_radiance.radiance[state.og_path_idx] = radiance;
+      final_radiance.radiance[state.og_path_idx] = state.radiance;
       return;
     }
 
     // Continue bounces
     float seed = noise3D(float(thread), float(next_ray_count.count), rec.normal.x);
-    float r0 = noise3D(seed, float(state.bounce) * 0.1273, rec.p.x);
-    float r1 = noise3D(seed, float(state.bounce) * 0.3183, rec.p.y);
-    float r2 = noise3D(seed, float(state.bounce) * 0.7123, rec.p.z);
-    vec3 rand_unit_vec = normalize(vec3(r0, r1, r2) * 2.0 - 1.0);
-    vec3 new_ray_dir = normalize(rec.normal + rand_unit_vec);
+    vec3 new_ray_dir = normalize(
+      rec.normal + 
+      normalize(vec3( // Random unit vector
+        noise3D(seed, float(state.bounce) * 0.1273, rec.p.x), 
+        noise3D(seed, float(state.bounce) * 0.3183, rec.p.y), 
+        noise3D(seed, float(state.bounce) * 0.7123, rec.p.z)
+      ) * 2.0 - 1.0)
+    );
 
     uint out_idx = atomicAdd(next_ray_count.count, 1);
 
@@ -94,9 +96,11 @@ void main() {
     ray_out.rays[out_idx].dir = new_ray_dir;
 
     path_state_out.states[out_idx].throughput =
-      state.throughput * BRDF; // (max(dot(rec.normal, new_ray_dir), 0.0) / hemiPDF) * BRDF;
+      state.throughput * 
+      vec3(0.4, 0.6, 0.4); // BRDF
+    // (max(dot(rec.normal, new_ray_dir), 0.0) / hemiPDF) * BRDF;
     // Removed hemisphere pdf cause its not in the CPU tracer, that way images are consistent
-    path_state_out.states[out_idx].radiance = radiance;
+    path_state_out.states[out_idx].radiance = state.radiance;
     path_state_out.states[out_idx].og_path_idx = state.og_path_idx;
     path_state_out.states[out_idx].bounce = state.bounce + 1;
   }
