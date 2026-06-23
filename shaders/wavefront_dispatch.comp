@@ -13,7 +13,7 @@ layout(binding = 1, std430) writeonly buffer DispatchSizeBuffer {
 } dispatch_size;
 
 void main() {
-  dispatch_size.x = (next_ray_count.count + 255) / 256;
+  dispatch_size.x = (next_ray_count.count + 63) / 64;
   dispatch_size.y = 1;
   dispatch_size.z = 1;
 }

@@ -4,7 +4,7 @@
 #include "ray.glsl"
 #include "bvh_traversal.glsl"
 
-layout(local_size_x = 256) in;
+layout(local_size_x = 64) in;
 
 layout(binding = 0, std430) readonly buffer RaysBuffer {
   Ray rays[];

@@ -8,7 +8,7 @@
 const int MAX_BOUNCES = 20;
 const float PI = 3.14159;
 
-layout(local_size_x = 256) in;
+layout(local_size_x = 64) in;
 
 // IN BUFFERS
 layout(binding = 0, std430) readonly buffer RaysInBuffer {
