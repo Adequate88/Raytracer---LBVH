@@ -2,11 +2,11 @@
 
 layout(local_size_x = 1) in;
 
-layout(binding = 0, std430) readonly buffer NextRayCountBuffer {
+layout(binding = 7, std430) readonly buffer NextRayCountBuffer {
   uint count;
 } next_ray_count;
 
-layout(binding = 1, std430) writeonly buffer DispatchSizeBuffer {
+layout(binding = 10, std430) writeonly buffer DispatchSizeBuffer {
   uint x;
   uint y;
   uint z;

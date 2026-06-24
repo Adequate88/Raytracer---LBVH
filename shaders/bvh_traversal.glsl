@@ -32,7 +32,7 @@ bool aabb_hit(vec3 ray_origin, vec3 adinv, float t_curr_min,
   return (t_min <= t_max) && (t_max > 0.0) && (t_min < t_curr_min);
 }
 
-layout(binding = 1, std430) readonly buffer SceneBuffer {
+layout(binding = 8, std430) readonly buffer SceneBuffer {
   triangle triangles[];
 } scene;
 
@@ -42,7 +42,7 @@ const int BVH_STACK_SIZE = 32;
 
 // layout(push_constant) uniform Camera {} cam;
 
-layout(binding = 2, std430) buffer BvhBuffer {
+layout(binding = 9, std430) buffer BvhBuffer {
   node nodes[];
 } bvh;
 

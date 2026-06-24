@@ -17,21 +17,15 @@ public:
   VkPipeline _pipeline;
   // Wavefront variables:
   VkDescriptorSetLayout _wavefrontGenerateDescriptorSetLayout;
-  VkDescriptorSetLayout _wavefrontExtendDescriptorSetLayout;
-  VkDescriptorSetLayout _wavefrontShadeDescriptorSetLayout;
-  VkDescriptorSetLayout _wavefrontDispatchDescriptorSetLayout;
+  VkDescriptorSetLayout _wavefrontUnifiedDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontFinalizeDescriptorSetLayout;
   VkDescriptorSet _wavefrontGenerateDescriptorSet;
-  VkDescriptorSet _wavefrontExtendDescriptorSets[2];
-  VkDescriptorSet _wavefrontShadeDescriptorSets[2];
-  VkDescriptorSet _wavefrontDispatchDescriptorSets[2];
+  VkDescriptorSet _wavefrontUnifiedDescriptorSets[2];
   VkDescriptorSet _wavefrontFinalizeDescriptorSet;
   VkDescriptorPool _wavefrontDescriptorPool;
 
   VkPipelineLayout _wavefrontGenerateLayout;
-  VkPipelineLayout _wavefrontExtendLayout;
-  VkPipelineLayout _wavefrontShadeLayout;
-  VkPipelineLayout _wavefrontDispatchLayout;
+  VkPipelineLayout _wavefrontUnifiedLayout;
   VkPipelineLayout _wavefrontFinalizeLayout;
   VkPipeline _wavefrontGeneratePipeline;
   VkPipeline _wavefrontExtendPipeline;

@@ -10,11 +10,11 @@ layout(binding = 0, std430) readonly buffer RaysBuffer {
   Ray rays[];
 } ray_in;
 
-layout(binding = 3, std430) writeonly buffer HitRecordsBuffer {
+layout(binding = 2, std430) writeonly buffer HitRecordsBuffer {
   hit_record records[];
 } hit_records;
 
-layout(binding = 4, std430) readonly buffer LastRayCountBuffer {
+layout(binding = 3, std430) readonly buffer LastRayCountBuffer {
   uint count;
 } last_ray_count;
 
