@@ -10,7 +10,7 @@
 #include "types.h"
 #include <fmt/base.h>
 
-const int SAMPLES = 20;
+const int SAMPLES = 10;
 const std::string MODELS_DIR = "models/";
 
 struct scene_config {

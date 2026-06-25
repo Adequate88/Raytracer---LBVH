@@ -147,7 +147,7 @@ int main() {
                    METRIC_READ("Vulkan Device Init") +
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
-  METRIC_EXPORT("data/wavefront_with_accel_traversal.csv");
+  METRIC_EXPORT("data/wavefront_soa.csv");
 #endif
 
   return 0;
