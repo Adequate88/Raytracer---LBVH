@@ -9,10 +9,8 @@ void main() {
   // Init node
   uint leaf_idx = primitiveCount - 1 + idx;
 
-  nodes[leaf_idx].bbox = primBBoxes[primIndices[idx]];
-  nodes[leaf_idx].primitive_id = int(primIndices[idx]);
-  nodes[leaf_idx].parent = -1;
-  nodes[leaf_idx].left = -1;
-  nodes[leaf_idx].right = -1;
-  nodes[leaf_idx].atomic_counter = 0;
+  parents[leaf_idx] = -1;
+  leftChilds[leaf_idx] = -1;
+  rightChilds[leaf_idx] = -1;
+  atomicCounters[leaf_idx] = 0;
 }

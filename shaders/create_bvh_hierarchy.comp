@@ -59,10 +59,10 @@ void main() {
   if (node_idx >= primitiveCount - 1) return;
 
   if (node_idx == 0) {
-    nodes[node_idx].parent = -1; // Nodes is in global gpu mem
+    parents[node_idx] = -1; // Nodes is in global gpu mem
   }
-  nodes[node_idx].left = -1;
-  nodes[node_idx].right = -1;
+  leftChilds[node_idx] = -1;
+  rightChilds[node_idx] = -1;
 
   ivec2 range = find_range(node_idx);
   int split = find_split(range.x, range.y);
@@ -70,14 +70,18 @@ void main() {
   int left = (split == range.x) ? (split + primitiveCount - 1) : split;
   int right = (split + 1 == range.y) ? (split + primitiveCount) : (split + 1);
 
-  nodes[node_idx].left = left;
-  nodes[node_idx].right = right;
-  nodes[node_idx].primitive_id = -1;
-  nodes[node_idx].atomic_counter = 0;
+  leftChilds[node_idx] = left;
+  rightChilds[node_idx] = right;
+  atomicCounters[node_idx] = 0;
 
-  nodes[node_idx].bbox.corner1 = vec4(FLT_MAX, FLT_MAX, FLT_MAX, 0.0);
-  nodes[node_idx].bbox.corner2 = vec4(-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0);
+  corner1x[node_idx] = FLT_MAX;
+  corner1y[node_idx] = FLT_MAX;
+  corner1z[node_idx] = FLT_MAX;
 
-  atomicExchange(nodes[left].parent, node_idx);
-  atomicExchange(nodes[right].parent, node_idx);
+  corner2x[node_idx] = -FLT_MAX;
+  corner2y[node_idx] = -FLT_MAX;
+  corner2z[node_idx] = -FLT_MAX;
+
+  atomicExchange(parents[left], node_idx);
+  atomicExchange(parents[right], node_idx);
 }

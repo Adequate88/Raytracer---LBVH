@@ -9,12 +9,20 @@
 #define NODE_STRUCT_BYTES                                                      \
   64 // 64 Bytes = 4 Bytes * 6 (AABB) + 4 Bytes * 4 (Left, Right, Parent,
      // PrimIdx) + 12 bytes of padding
-#define BVH_KERNELS 11
+#define BVH_KERNELS 12
 
 struct bufferMemory {
   VkBuffer buffer;
   VkDeviceMemory memory;
   size_t size;
+};
+
+struct BvhTraversalBuffers {
+  VkBuffer corners[6]; // 1x,1y,1z,2x,2y,2z
+  VkBuffer leftChilds;
+  VkBuffer rightChilds;
+  VkBuffer primIndices;
+  int primitiveCount;
 };
 
 class Bvh {
@@ -27,7 +35,15 @@ public:
   // The Bvh owns the scene (primitive) buffer and the node buffer; the
   // raytracer binds both of these for traversal.
   VkBuffer sceneBufferHandle() const { return sceneBuffer.buffer; }
-  VkBuffer bvhBufferHandle() const { return bvhBuffer.buffer; }
+  BvhTraversalBuffers traversalHandles() const {
+    return {{cornerBuffers[0].buffer, cornerBuffers[1].buffer,
+             cornerBuffers[2].buffer, cornerBuffers[3].buffer,
+             cornerBuffers[4].buffer, cornerBuffers[5].buffer},
+            leftChildsBuffer.buffer,
+            rightChildsBuffer.buffer,
+            primIndicesBuffer.buffer,
+            (int)_primitiveCount};
+  }
 
 private:
   VulkanEngine &_engine;
@@ -38,8 +54,6 @@ private:
   size_t numBlocks;
 
   bufferMemory sceneBuffer;
-  bufferMemory bvhBuffer;
-  bufferMemory primBboxBuffer;
   bufferMemory mortonCodesBuffer;
   bufferMemory primIndicesBuffer;
   bufferMemory worldBboxBuffer;
@@ -48,6 +62,13 @@ private:
   bufferMemory globSumBuffer;
   bufferMemory outputMortonCodeBuffer;
   bufferMemory outputPrimIndicesBuffer;
+
+  bufferMemory cornerBuffers[6];    // 11-16
+  bufferMemory leftChildsBuffer;    // 17
+  bufferMemory rightChildsBuffer;   // 18
+  bufferMemory parentsBuffer;       // 19
+  bufferMemory atomicCountersBuffer; // 20
+  bufferMemory cornerOutBuffers[6]; // 21-26
 
   VkDescriptorSetLayout _bvhDescriptorLayout;
   VkDescriptorPool _bvhDescriptorPool;

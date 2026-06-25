@@ -8,7 +8,12 @@ void main() {
 
   // Create bbox
   triangle tri = scene.triangles[idx];
+  uint leaf_idx = idx + primitiveCount - 1;
 
-  primBBoxes[idx].corner1 = vec4(min(tri.v0.xyz, min(tri.v1.xyz, tri.v2.xyz)), 0.0f);
-  primBBoxes[idx].corner2 = vec4(max(tri.v0.xyz, max(tri.v1.xyz, tri.v2.xyz)), 0.0f);
+  corner1x[leaf_idx] = min(tri.v0.x, min(tri.v1.x, tri.v2.x));
+  corner1y[leaf_idx] = min(tri.v0.y, min(tri.v1.y, tri.v2.y));
+  corner1z[leaf_idx] = min(tri.v0.z, min(tri.v1.z, tri.v2.z));
+  corner2x[leaf_idx] = max(tri.v0.x, max(tri.v1.x, tri.v2.x));
+  corner2y[leaf_idx] = max(tri.v0.y, max(tri.v1.y, tri.v2.y));
+  corner2z[leaf_idx] = max(tri.v0.z, max(tri.v1.z, tri.v2.z));
 }

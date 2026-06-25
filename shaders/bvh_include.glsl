@@ -3,50 +3,11 @@
 #define FLT_MAX 3.4e38
 #define LOCAL_SIZE gl_WorkGroupSize.x
 
-struct aabb {
-  vec4 corner1;
-  vec4 corner2;
-};
-
-struct node {
-  aabb bbox;
-  int left;
-  int right;
-  int parent;
-  int primitive_id;
-  int atomic_counter; // 52 bytes
-  int pad_to_64[3]; // Vec4 has alignment of 16 bytes, so node has alignment of 16 bytes, so to ensure correct reads we need sizeof(node) % 16 == 0.
-};
-
 layout(local_size_x = 256) in;
 
 layout(binding = 0, std430) readonly buffer SceneBuffer {
   triangle triangles[];
 } scene;
-
-layout(binding = 1, std430) coherent buffer BvhBuffer {
-  node nodes[];
-};
-
-bool aabb_hit(vec3 ray_origin, vec3 ray_dir, float t_curr_min,
-  vec3 aabb_min, vec3 aabb_max) {
-  vec3 adinv = 1.0f / ray_dir; // TODO: replace with precomputed argument
-
-  vec3 t0 = (aabb_min - ray_origin) * adinv;
-  vec3 t1 = (aabb_max - ray_origin) * adinv;
-
-  vec3 t_min_vec = min(t0, t1);
-  vec3 t_max_vec = max(t0, t1);
-
-  float t_min = max(max(t_min_vec.x, t_min_vec.y), t_min_vec.z);
-  float t_max = min(min(t_max_vec.x, t_max_vec.y), t_max_vec.z);
-
-  return (t_min <= t_max) && (t_max > 0.0) && (t_min < t_curr_min);
-}
-
-layout(binding = 2, std430) buffer primBboxesBuffer {
-  aabb primBBoxes[];
-};
 
 layout(binding = 3, std430) buffer mortonCodesBuffer {
   uint mortonCodes[];
@@ -57,8 +18,13 @@ layout(binding = 4, std430) buffer primIndicesBuffer {
 };
 
 layout(binding = 5, std430) buffer worldBboxBuffer {
-  aabb worldBbox;
-};
+  float corner1x;
+  float corner1y;
+  float corner1z;
+  float corner2x;
+  float corner2y;
+  float corner2z;
+} worldBbox;
 
 layout(binding = 6, std430) buffer histogramBuffer {
   uint histogram[];
@@ -78,6 +44,73 @@ layout(binding = 9, std430) buffer outputMortonCodesBuffer {
 
 layout(binding = 10, std430) buffer outputPrimIndicesBuffer {
   uint outputPrimIndices[];
+};
+
+// SoA node and bbox
+
+layout(binding = 11, std430) buffer corner1xBuffer {
+  float corner1x[];
+};
+
+layout(binding = 12, std430) buffer corner1yBuffer {
+  float corner1y[];
+};
+
+layout(binding = 13, std430) buffer corner1zBuffer {
+  float corner1z[];
+};
+
+layout(binding = 14, std430) buffer corner2xBuffer {
+  float corner2x[];
+};
+
+layout(binding = 15, std430) buffer corner2yBuffer {
+  float corner2y[];
+};
+
+layout(binding = 16, std430) buffer corner2zBuffer {
+  float corner2z[];
+};
+
+layout(binding = 17, std430) buffer leftChildsBuffer {
+  int leftChilds[];
+};
+
+layout(binding = 18, std430) buffer rightChildsBuffer {
+  int rightChilds[];
+};
+
+layout(binding = 19, std430) buffer parentsBuffer {
+  int parents[];
+};
+
+layout(binding = 20, std430) buffer atomicCounterBuffer {
+  int atomicCounters[];
+};
+
+// Sorted-order destination arrays for the leaf-bbox reorder pass.
+layout(binding = 21, std430) buffer corner1xOutBuffer {
+  float corner1x_out[];
+};
+
+layout(binding = 22, std430) buffer corner1yOutBuffer {
+  float corner1y_out[];
+};
+
+layout(binding = 23, std430) buffer corner1zOutBuffer {
+  float corner1z_out[];
+};
+
+layout(binding = 24, std430) buffer corner2xOutBuffer {
+  float corner2x_out[];
+};
+
+layout(binding = 25, std430) buffer corner2yOutBuffer {
+  float corner2y_out[];
+};
+
+layout(binding = 26, std430) buffer corner2zOutBuffer {
+  float corner2z_out[];
 };
 
 layout(push_constant) uniform PushConstants {

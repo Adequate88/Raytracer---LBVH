@@ -8,12 +8,15 @@
 void main() {
   uint thread = gl_GlobalInvocationID.x;
   if (thread >= primitiveCount) return;
+  uint leaf_idx = thread + primitiveCount - 1;
 
-  vec4 barycenter = (primBBoxes[thread].corner2 + primBBoxes[thread].corner1) * 0.5;
+  float barycenterx = (corner2x[leaf_idx] + corner1x[leaf_idx]) * 0.5;
+  float barycentery = (corner2y[leaf_idx] + corner1y[leaf_idx]) * 0.5;
+  float barycenterz = (corner2z[leaf_idx] + corner1z[leaf_idx]) * 0.5;
 
-  float xCell = CELL_COUNT * (barycenter.x - worldBbox.corner1.x) / (worldBbox.corner2.x - worldBbox.corner1.x);
-  float yCell = CELL_COUNT * (barycenter.y - worldBbox.corner1.y) / (worldBbox.corner2.y - worldBbox.corner1.y);
-  float zCell = CELL_COUNT * (barycenter.z - worldBbox.corner1.z) / (worldBbox.corner2.z - worldBbox.corner1.z);
+  float xCell = CELL_COUNT * (barycenterx - worldBbox.corner1x) / (worldBbox.corner2x - worldBbox.corner1x);
+  float yCell = CELL_COUNT * (barycentery - worldBbox.corner1y) / (worldBbox.corner2y - worldBbox.corner1y);
+  float zCell = CELL_COUNT * (barycenterz - worldBbox.corner1z) / (worldBbox.corner2z - worldBbox.corner1z);
 
   uint x = min(uint(xCell), CELL_COUNT - 1);
   uint y = min(uint(yCell), CELL_COUNT - 1);

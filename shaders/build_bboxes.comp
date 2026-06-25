@@ -2,32 +2,31 @@
 #extension GL_GOOGLE_include_directive : require
 #include "bvh_include.glsl"
 
-aabb create_bbox(aabb box0, aabb box1) {
-  aabb new_bbox;
-  new_bbox.corner1 = min(box0.corner1, box1.corner1);
-  new_bbox.corner2 = max(box0.corner2, box1.corner2);
-  return new_bbox;
-}
-
 void main() {
   int leaf_idx = int(gl_GlobalInvocationID.x);
 
   if (leaf_idx >= primitiveCount) return;
 
   int current_idx = primitiveCount - 1 + leaf_idx;
-  int parent_idx = nodes[current_idx].parent;
+  int parent_idx = parents[current_idx];
 
   while (parent_idx != -1) {
-    int old_count = atomicAdd(nodes[parent_idx].atomic_counter, 1);
+    int old_count = atomicAdd(atomicCounters[parent_idx], 1);
     if (old_count == 0) break; // First visitor waits
 
-    int left_idx = nodes[parent_idx].left;
-    int right_idx = nodes[parent_idx].right;
-    nodes[parent_idx].bbox = create_bbox(nodes[left_idx].bbox, nodes[right_idx].bbox);
+    int left_idx = leftChilds[parent_idx];
+    int right_idx = rightChilds[parent_idx];
+
+    corner1x[parent_idx] = min(corner1x[left_idx], corner1x[right_idx]);
+    corner1y[parent_idx] = min(corner1y[left_idx], corner1y[right_idx]);
+    corner1z[parent_idx] = min(corner1z[left_idx], corner1z[right_idx]);
+    corner2x[parent_idx] = max(corner2x[left_idx], corner2x[right_idx]);
+    corner2y[parent_idx] = max(corner2y[left_idx], corner2y[right_idx]);
+    corner2z[parent_idx] = max(corner2z[left_idx], corner2z[right_idx]);
 
     memoryBarrierBuffer();
 
     current_idx = parent_idx;
-    parent_idx = nodes[current_idx].parent;
+    parent_idx = parents[current_idx];
   }
 }

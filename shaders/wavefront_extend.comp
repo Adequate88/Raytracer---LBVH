@@ -2,6 +2,11 @@
 #extension GL_GOOGLE_include_directive : require
 
 #include "ray.glsl"
+
+layout(push_constant) uniform PushConstants {
+  int primitiveCount;
+};
+
 #include "bvh_traversal.glsl"
 
 layout(local_size_x = 64) in;

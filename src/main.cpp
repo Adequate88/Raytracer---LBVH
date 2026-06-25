@@ -41,7 +41,7 @@ int main() {
   METRIC_END_TIME("Total BVH Construction Time");
 
   raytracer.initRaytracer(&config.cam.gpu_constants, bvh.sceneBufferHandle(),
-                          bvh.bvhBufferHandle());
+                          bvh.traversalHandles());
 
 #ifdef RGP_CAPTURE
   auto present_once = [&]() {

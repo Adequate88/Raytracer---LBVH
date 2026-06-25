@@ -1,0 +1,23 @@
+#version 460
+#extension GL_GOOGLE_include_directive : require
+#include "bvh_include.glsl"
+
+// Runs after the radix sort. primIndices[i] is the original primitive index
+// now sitting at sorted position i, so sorted leaf i must receive the box that
+// init_prim_bboxes parked at the original leaf slot. Reads the in-place leaf
+// arrays, writes the sorted result into the *_out arrays (separate buffers —
+// an in-place scatter would race, since reads and writes overlap the same slots).
+void main() {
+  uint i = gl_GlobalInvocationID.x;
+  if (i >= primitiveCount) return;
+
+  uint dst_slot = i + primitiveCount - 1;
+  uint src_slot = primIndices[i] + primitiveCount - 1;
+
+  corner1x_out[dst_slot] = corner1x[src_slot];
+  corner1y_out[dst_slot] = corner1y[src_slot];
+  corner1z_out[dst_slot] = corner1z[src_slot];
+  corner2x_out[dst_slot] = corner2x[src_slot];
+  corner2y_out[dst_slot] = corner2y[src_slot];
+  corner2z_out[dst_slot] = corner2z[src_slot];
+}

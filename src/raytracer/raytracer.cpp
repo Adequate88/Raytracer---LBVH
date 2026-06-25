@@ -4,6 +4,7 @@
 #include "vulkan_types.h"
 #include "vulkan_utils.h"
 #include <cstdint>
+#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -12,15 +13,14 @@
 Raytracer::Raytracer(VulkanEngine &engine) : _engine(engine) {}
 
 void Raytracer::initRaytracer(const void *cameraData, VkBuffer sceneBuffer,
-                              VkBuffer bvhBuffer) {
+                              BvhTraversalBuffers bvh) {
   _cameraConstants = cameraData;
   _sceneBuffer = sceneBuffer;
-  _BvhBuffer = bvhBuffer;
+  _bvh = bvh;
+  _primitiveCount = bvh.primitiveCount;
 
   createTimestampPool();
   createRenderTarget();
-  createDescriptors();
-  createPipeline();
 
   // Wavefront
   createWavefrontBuffers();
@@ -458,30 +458,30 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
 
-  VkDescriptorSetLayoutBinding bvhUnifiedBinding{
-      .binding = 9,
-      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      .descriptorCount = 1,
-      .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
-
   VkDescriptorSetLayoutBinding dispatchSizeUnifiedBinding{
       .binding = 10,
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .descriptorCount = 1,
       .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT };
 
-  VkDescriptorSetLayoutBinding layoutUnifiedBindings[11] = {
+  std::vector<VkDescriptorSetLayoutBinding> layoutUnifiedBindings = {
       raysInUnifiedBinding,        pathStatesInUnifiedBinding,
       hitRecordsUnifiedBinding,    lastRayCountUnifiedBinding,
       raysOutUnifiedBinding,       pathStatesOutUnifiedBinding,
       finalRadianceUnifiedBinding, nextRayCountUnifiedBinding,
-      sceneUnifiedBinding,         bvhUnifiedBinding,
-      dispatchSizeUnifiedBinding };
+      sceneUnifiedBinding,         dispatchSizeUnifiedBinding };
+
+  for (uint32_t b = 11; b <= 19; b++) // SoA traversal: corners 11-16, childs
+    layoutUnifiedBindings.push_back(VkDescriptorSetLayoutBinding{
+        .binding = b,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .descriptorCount = 1,
+        .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT});
 
   VkDescriptorSetLayoutCreateInfo unifiedSetInfo{
       .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-      .bindingCount = 11,
-      .pBindings = layoutUnifiedBindings };
+      .bindingCount = (uint32_t)layoutUnifiedBindings.size(),
+      .pBindings = layoutUnifiedBindings.data() };
 
   VK_CHECK(vkCreateDescriptorSetLayout(_engine._device, &unifiedSetInfo, nullptr,
       &_wavefrontUnifiedDescriptorSetLayout));
@@ -515,7 +515,7 @@ void Raytracer::createWavefrontDescriptors() {
   VkDescriptorPoolSize renderPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                       .descriptorCount = 2};
   VkDescriptorPoolSize buffersPoolSize{
-      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 25};
+      .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, .descriptorCount = 50};
 
   VkDescriptorPoolSize poolSizes[2] = {renderPoolSize, buffersPoolSize};
   VkDescriptorPoolCreateInfo poolInfo{
@@ -714,18 +714,6 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorUnifiedSceneBufferInfo0 };
 
-  VkDescriptorBufferInfo descriptorUnifiedBvhBufferInfo0{ _BvhBuffer, 0,
-                                                        VK_WHOLE_SIZE };
-
-  VkWriteDescriptorSet writeUnifiedBvh0{
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstSet = _wavefrontUnifiedDescriptorSets[0],
-      .dstBinding = 9,
-      .dstArrayElement = 0,
-      .descriptorCount = 1,
-      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      .pBufferInfo = &descriptorUnifiedBvhBufferInfo0 };
-
   VkDescriptorBufferInfo descriptorUnifiedDispatchBufferInfo0{
       _wavefrontDispatchBuffer, 0, VK_WHOLE_SIZE };
 
@@ -739,15 +727,32 @@ void Raytracer::createWavefrontDescriptors() {
       .pBufferInfo = &descriptorUnifiedDispatchBufferInfo0 };
 
 
-  VkWriteDescriptorSet writeUnifiedSets0[11] = {
+  VkWriteDescriptorSet writeUnifiedSets0[10] = {
       writeUnifiedRaysIn0,        writeUnifiedPathStatesIn0,
       writeUnifiedHitRecord0,     writeUnifiedLastRayCount0,
       writeUnifiedRaysOut0,       writeUnifiedPathStatesOut0,
       writeUnifiedFinalRadiance0, writeUnifiedNextRayCount0,
-      writeUnifiedScene0,         writeUnifiedBvh0,
-      writeUnifiedDispatch0 };
+      writeUnifiedScene0,         writeUnifiedDispatch0 };
 
-  vkUpdateDescriptorSets(_engine._device, 11, writeUnifiedSets0, 0, nullptr);
+  vkUpdateDescriptorSets(_engine._device, 10, writeUnifiedSets0, 0, nullptr);
+
+  VkBuffer soaBufs[9] = {_bvh.corners[0], _bvh.corners[1], _bvh.corners[2],
+                         _bvh.corners[3], _bvh.corners[4], _bvh.corners[5],
+                         _bvh.leftChilds, _bvh.rightChilds, _bvh.primIndices};
+
+  VkDescriptorBufferInfo soaInfos0[9];
+  VkWriteDescriptorSet soaWrites0[9];
+  for (int i = 0; i < 9; i++) {
+    soaInfos0[i] = {soaBufs[i], 0, VK_WHOLE_SIZE};
+    soaWrites0[i] = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = _wavefrontUnifiedDescriptorSets[0],
+                     .dstBinding = (uint32_t)(11 + i),
+                     .dstArrayElement = 0,
+                     .descriptorCount = 1,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                     .pBufferInfo = &soaInfos0[i]};
+  }
+  vkUpdateDescriptorSets(_engine._device, 9, soaWrites0, 0, nullptr);
 
   // Unified 1
   VkDescriptorBufferInfo descriptorUnifiedRaysInBufferInfo1{
@@ -858,18 +863,6 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorUnifiedSceneBufferInfo1 };
 
-  VkDescriptorBufferInfo descriptorUnifiedBvhBufferInfo1{ _BvhBuffer, 0,
-                                                        VK_WHOLE_SIZE };
-
-  VkWriteDescriptorSet writeUnifiedBvh1{
-      .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-      .dstSet = _wavefrontUnifiedDescriptorSets[1],
-      .dstBinding = 9,
-      .dstArrayElement = 0,
-      .descriptorCount = 1,
-      .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-      .pBufferInfo = &descriptorUnifiedBvhBufferInfo1 };
-
   VkDescriptorBufferInfo descriptorUnifiedDispatchBufferInfo1{
       _wavefrontDispatchBuffer, 0, VK_WHOLE_SIZE };
 
@@ -882,15 +875,28 @@ void Raytracer::createWavefrontDescriptors() {
       .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
       .pBufferInfo = &descriptorUnifiedDispatchBufferInfo1 };
 
-  VkWriteDescriptorSet writeUnifiedSets1[11] = {
+  VkWriteDescriptorSet writeUnifiedSets1[10] = {
       writeUnifiedRaysIn1,        writeUnifiedPathStatesIn1,
       writeUnifiedHitRecord1,     writeUnifiedLastRayCount1,
       writeUnifiedRaysOut1,       writeUnifiedPathStatesOut1,
       writeUnifiedFinalRadiance1, writeUnifiedNextRayCount1,
-      writeUnifiedScene1,         writeUnifiedBvh1,
-      writeUnifiedDispatch1 };
+      writeUnifiedScene1,         writeUnifiedDispatch1 };
 
-  vkUpdateDescriptorSets(_engine._device, 11, writeUnifiedSets1, 0, nullptr);
+  vkUpdateDescriptorSets(_engine._device, 10, writeUnifiedSets1, 0, nullptr);
+
+  VkDescriptorBufferInfo soaInfos1[9];
+  VkWriteDescriptorSet soaWrites1[9];
+  for (int i = 0; i < 9; i++) {
+    soaInfos1[i] = {soaBufs[i], 0, VK_WHOLE_SIZE};
+    soaWrites1[i] = {.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                     .dstSet = _wavefrontUnifiedDescriptorSets[1],
+                     .dstBinding = (uint32_t)(11 + i),
+                     .dstArrayElement = 0,
+                     .descriptorCount = 1,
+                     .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                     .pBufferInfo = &soaInfos1[i]};
+  }
+  vkUpdateDescriptorSets(_engine._device, 9, soaWrites1, 0, nullptr);
 
   // Finalize
   VkDescriptorImageInfo descriptorFinalizeImageInfo{
@@ -960,12 +966,16 @@ void Raytracer::createWavefrontPipelines() {
   vkDestroyShaderModule(_engine._device, generateShader, nullptr);
 
   // Unified layout
+  VkPushConstantRange unifiedPcRange{.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT,
+                                     .offset = 0,
+                                     .size = sizeof(int)}; // primitiveCount
+
   VkPipelineLayoutCreateInfo unifiedLayoutInfo{
       .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
       .setLayoutCount = 1,
       .pSetLayouts = &_wavefrontUnifiedDescriptorSetLayout,
-      .pushConstantRangeCount = 0,
-      .pPushConstantRanges = VK_NULL_HANDLE };
+      .pushConstantRangeCount = 1,
+      .pPushConstantRanges = &unifiedPcRange };
 
   VK_CHECK(vkCreatePipelineLayout(_engine._device, &unifiedLayoutInfo, nullptr,
       &_wavefrontUnifiedLayout));
@@ -1162,6 +1172,10 @@ void Raytracer::recordWavefrontBuffer(uint32_t image_index) {
 
   vkCmdDispatch(computeCmd, 1, 1, 1);
   endLabel();
+
+  vkCmdPushConstants(computeCmd, _wavefrontUnifiedLayout,
+                     VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(int),
+                     &_primitiveCount);
 
   // Extend and Shade loop
   // MAX BOUNCES = 20

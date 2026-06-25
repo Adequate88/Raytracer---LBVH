@@ -1,5 +1,6 @@
 #pragma once
 
+#include "bvh.h"
 #include "vulkan_engine.h"
 #include "vulkan_engine/vulkan_engine.h"
 #include <cstdint>
@@ -50,7 +51,7 @@ public:
   // The scene (primitive) and BVH node buffers are owned by the Bvh and passed
   // in here so the descriptor set can bind them. Build the BVH before calling.
   void initRaytracer(const void *cameraData, VkBuffer sceneBuffer,
-                     VkBuffer bvhBuffer);
+                     BvhTraversalBuffers bvh);
   void recordBuffer(uint32_t image_index);
   void recordRenderTime();
 
@@ -76,6 +77,8 @@ private:
   // End of wavefront variables
 
   VkBuffer _BvhBuffer;
+  BvhTraversalBuffers _bvh;
+  int _primitiveCount;
 
   VkQueryPool _timestampPool;
 

@@ -24,7 +24,7 @@ void Bvh::init(const void *data, size_t size) {
 }
 
 void Bvh::build() {
-  constexpr uint32_t maxDispatches = 3 + 8 * 5 + 3;
+  constexpr uint32_t maxDispatches = 3 + 8 * 5 + 4;
   VkQueryPoolCreateInfo queryInfo{.sType =
                                       VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
                                   .queryType = VK_QUERY_TYPE_TIMESTAMP,
@@ -132,6 +132,41 @@ void Bvh::build() {
   }
 
   dispatch(8, _bvhDescriptors[0], primGroups, "init_prim_nodes");
+
+  dispatch(11, _bvhDescriptors[0], primGroups, "reorder_leaf_bboxes");
+
+  VkMemoryBarrier2 toCopy{
+      .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+      .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+      .dstStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+      .dstAccessMask = VK_ACCESS_2_TRANSFER_READ_BIT};
+  VkDependencyInfo depToCopy{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                             .memoryBarrierCount = 1,
+                             .pMemoryBarriers = &toCopy};
+  vkCmdPipelineBarrier2(buildCommandBuffer, &depToCopy);
+
+  size_t leafOffset = (_primitiveCount - 1) * 4;
+  size_t leafBytes = _primitiveCount * 4;
+  for (int i = 0; i < 6; i++) {
+    VkBufferCopy region{
+        .srcOffset = leafOffset, .dstOffset = leafOffset, .size = leafBytes};
+    vkCmdCopyBuffer(buildCommandBuffer, cornerOutBuffers[i].buffer,
+                    cornerBuffers[i].buffer, 1, &region);
+  }
+
+  VkMemoryBarrier2 fromCopy{
+      .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+      .srcStageMask = VK_PIPELINE_STAGE_2_COPY_BIT,
+      .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+      .dstStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+      .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                       VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT};
+  VkDependencyInfo depFromCopy{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                               .memoryBarrierCount = 1,
+                               .pMemoryBarriers = &fromCopy};
+  vkCmdPipelineBarrier2(buildCommandBuffer, &depFromCopy);
+
   dispatch(9, _bvhDescriptors[0], internalGroups, "create_bvh_hierarchy");
   dispatch(10, _bvhDescriptors[0], primGroups, "build_bboxes");
 
@@ -165,7 +200,7 @@ void Bvh::build() {
   float radix =
       perKernel[3] + perKernel[4] + perKernel[5] + perKernel[6] + perKernel[7];
   float hierarchy = perKernel[8] + perKernel[9];
-  float bbox = perKernel[10];
+  float bbox = perKernel[10] + perKernel[11]; // build_bboxes + reorder
 
   METRIC_SET_VALUE("Primitive+World BBox Kernel", bboxSetup);
   METRIC_SET_VALUE("Morton Code Kernel", morton);
@@ -218,16 +253,34 @@ void Bvh::createSceneBuffer(const void *data, size_t size) {
 void Bvh::createBvhBuffers() { // XXX: Currently doing 1:1 buffer/deviceMemory.
                                // Change later if needed
 
-  // BvhBuffer: 2N-1 nodes (N leaves + N-1 internal)
-  bvhBuffer.size = (2 * _primitiveCount - 1) * NODE_STRUCT_BYTES;
-  createStorageBuffer(DEVICE, bvhBuffer.buffer, bvhBuffer.size,
-                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, bvhBuffer.memory);
+  size_t nodeArrayBytes = (2 * _primitiveCount - 1) * 4;
 
-  // primBboxBuffer: N aabbs (2 vec4 = 32 Bytes)
-  primBboxBuffer.size = _primitiveCount * 32;
-  createStorageBuffer(DEVICE, primBboxBuffer.buffer, primBboxBuffer.size,
-                      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                      primBboxBuffer.memory);
+  for (int i = 0; i < 6; i++) {
+    cornerBuffers[i].size = nodeArrayBytes;
+    createStorageBuffer(DEVICE, cornerBuffers[i].buffer, cornerBuffers[i].size,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        cornerBuffers[i].memory,
+                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                            VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+  }
+
+  for (int i = 0; i < 6; i++) {
+    cornerOutBuffers[i].size = nodeArrayBytes;
+    createStorageBuffer(DEVICE, cornerOutBuffers[i].buffer,
+                        cornerOutBuffers[i].size,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                        cornerOutBuffers[i].memory,
+                        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+                            VK_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  }
+
+  bufferMemory *intArrays[4] = {&leftChildsBuffer, &rightChildsBuffer,
+                                &parentsBuffer, &atomicCountersBuffer};
+  for (bufferMemory *b : intArrays) {
+    b->size = nodeArrayBytes;
+    createStorageBuffer(DEVICE, b->buffer, b->size,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, b->memory);
+  }
 
   // mortonCodesBuffer: N uints
   mortonCodesBuffer.size = _primitiveCount * 4;
@@ -241,8 +294,8 @@ void Bvh::createBvhBuffers() { // XXX: Currently doing 1:1 buffer/deviceMemory.
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                       primIndicesBuffer.memory);
 
-  // worldBboxBuffer: 1 aabb (2 vec4 = 32 Bytes)
-  worldBboxBuffer.size = 32;
+  // worldBboxBuffer: 6 floats
+  worldBboxBuffer.size = 24;
   createStorageBuffer(DEVICE, worldBboxBuffer.buffer, worldBboxBuffer.size,
                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                       worldBboxBuffer.memory);
@@ -280,12 +333,15 @@ void Bvh::createBvhBuffers() { // XXX: Currently doing 1:1 buffer/deviceMemory.
 
 void Bvh::createDescriptor() {
 
-  uint32_t bindingCount = 11; // XXX : BUFFER COUNT HARDCODED TO 11
+  std::vector<uint32_t> usedBindings = {0,  3,  4,  5,  6,  7,  8,  9,  10, 11,
+                                        12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+                                        22, 23, 24, 25, 26};
+  uint32_t bindingCount = usedBindings.size();
 
   std::vector<VkDescriptorSetLayoutBinding> bindings;
-  for (uint32_t i = 0; i < bindingCount; i++) {
+  for (uint32_t b : usedBindings) {
     bindings.push_back(VkDescriptorSetLayoutBinding{
-        .binding = i,
+        .binding = b,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
         .descriptorCount = 1,
         .stageFlags = VK_SHADER_STAGE_COMPUTE_BIT});
@@ -300,7 +356,6 @@ void Bvh::createDescriptor() {
                                        &_bvhDescriptorLayout));
 
   std::vector<VkDescriptorPoolSize> poolSizes;
-
   for (uint32_t i = 0; i < bindingCount; i++) {
     poolSizes.push_back(
         VkDescriptorPoolSize{.type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -325,34 +380,40 @@ void Bvh::createDescriptor() {
 
   VK_CHECK(vkAllocateDescriptorSets(DEVICE, &allocInfo, _bvhDescriptors));
 
-  std::vector<VkDescriptorBufferInfo> bufferInfos(
-      bindingCount,
-      VkDescriptorBufferInfo{.offset = 0, .range = VK_WHOLE_SIZE});
-
-  bufferInfos[0].buffer = sceneBuffer.buffer;
-  bufferInfos[1].buffer = bvhBuffer.buffer;
-  bufferInfos[2].buffer = primBboxBuffer.buffer;
-  bufferInfos[3].buffer = mortonCodesBuffer.buffer;
-  bufferInfos[4].buffer = primIndicesBuffer.buffer;
-  bufferInfos[5].buffer = worldBboxBuffer.buffer;
-  bufferInfos[6].buffer = histogramBuffer.buffer;
-  bufferInfos[7].buffer = scannedGramBuffer.buffer;
-  bufferInfos[8].buffer = globSumBuffer.buffer;
-  bufferInfos[9].buffer = outputMortonCodeBuffer.buffer;
-  bufferInfos[10].buffer = outputPrimIndicesBuffer.buffer;
+  VkBuffer bufByBinding[27] = {};
+  bufByBinding[0] = sceneBuffer.buffer;
+  bufByBinding[3] = mortonCodesBuffer.buffer;
+  bufByBinding[4] = primIndicesBuffer.buffer;
+  bufByBinding[5] = worldBboxBuffer.buffer;
+  bufByBinding[6] = histogramBuffer.buffer;
+  bufByBinding[7] = scannedGramBuffer.buffer;
+  bufByBinding[8] = globSumBuffer.buffer;
+  bufByBinding[9] = outputMortonCodeBuffer.buffer;
+  bufByBinding[10] = outputPrimIndicesBuffer.buffer;
+  for (int i = 0; i < 6; i++)
+    bufByBinding[11 + i] = cornerBuffers[i].buffer;
+  bufByBinding[17] = leftChildsBuffer.buffer;
+  bufByBinding[18] = rightChildsBuffer.buffer;
+  bufByBinding[19] = parentsBuffer.buffer;
+  bufByBinding[20] = atomicCountersBuffer.buffer;
+  for (int i = 0; i < 6; i++)
+    bufByBinding[21 + i] = cornerOutBuffers[i].buffer;
 
   for (uint32_t set = 0; set < 2; set++) {
     if (set == 1) {
-      std::swap(bufferInfos[3].buffer, bufferInfos[9].buffer);
-      std::swap(bufferInfos[4].buffer, bufferInfos[10].buffer);
+      std::swap(bufByBinding[3], bufByBinding[9]);
+      std::swap(bufByBinding[4], bufByBinding[10]);
     }
 
+    std::vector<VkDescriptorBufferInfo> bufferInfos(bindingCount);
     std::vector<VkWriteDescriptorSet> writeSets;
     for (uint32_t i = 0; i < bindingCount; i++) {
+      uint32_t b = usedBindings[i];
+      bufferInfos[i] = {bufByBinding[b], 0, VK_WHOLE_SIZE};
       writeSets.push_back(VkWriteDescriptorSet{
           .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
           .dstSet = _bvhDescriptors[set],
-          .dstBinding = i,
+          .dstBinding = b,
           .dstArrayElement = 0,
           .descriptorCount = 1,
           .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -385,7 +446,7 @@ void Bvh::createPipelines() {
       "prefix_sum.spv",           "scan_global_sum.spv",
       "add_global_sums.spv",      "scatter.spv",
       "init_prim_nodes.spv",      "create_bvh_hierarchy.spv",
-      "build_bboxes.spv"};
+      "build_bboxes.spv",         "reorder_leaf_bboxes.spv"};
 
   std::vector<VkComputePipelineCreateInfo> createInfos;
   std::vector<VkShaderModule> shaderModules;

@@ -2,34 +2,77 @@
 #extension GL_GOOGLE_include_directive : require
 #include "bvh_include.glsl"
 
-shared aabb reductionArray[LOCAL_SIZE];
+shared float reductionCorner1x[LOCAL_SIZE];
+shared float reductionCorner1y[LOCAL_SIZE];
+shared float reductionCorner1z[LOCAL_SIZE];
+shared float reductionCorner2x[LOCAL_SIZE];
+shared float reductionCorner2y[LOCAL_SIZE];
+shared float reductionCorner2z[LOCAL_SIZE];
 
 void main() {
   uint globIdx = gl_GlobalInvocationID.x;
 
-  aabb threadBBox = aabb(vec4(FLT_MAX, FLT_MAX, FLT_MAX, 0.0), vec4(-FLT_MAX, -FLT_MAX, -FLT_MAX, 0.0));
+  float threadCorner1x = FLT_MAX;
+  float threadCorner1y = FLT_MAX;
+  float threadCorner1z = FLT_MAX;
+  float threadCorner2x = -FLT_MAX;
+  float threadCorner2y = -FLT_MAX;
+  float threadCorner2z = -FLT_MAX;
+
   uint localIdx = gl_LocalInvocationID.x;
 
-  for (uint idx = localIdx; idx < primitiveCount; idx += LOCAL_SIZE) { // Reduce to local array
-    threadBBox.corner1 = min(threadBBox.corner1, primBBoxes[idx].corner1);
-    threadBBox.corner2 = max(threadBBox.corner2, primBBoxes[idx].corner2);
+  for (uint idx = localIdx + primitiveCount - 1; idx < (primitiveCount << 1) - 1; idx += LOCAL_SIZE) { // Reduce to local array
+    threadCorner1x = min(threadCorner1x, corner1x[idx]);
+    threadCorner2x = max(threadCorner2x, corner2x[idx]);
+    threadCorner1y = min(threadCorner1y, corner1y[idx]);
+    threadCorner2y = max(threadCorner2y, corner2y[idx]);
+    threadCorner1z = min(threadCorner1z, corner1z[idx]);
+    threadCorner2z = max(threadCorner2z, corner2z[idx]);
   }
-  reductionArray[localIdx] = threadBBox;
+  reductionCorner1x[localIdx] = threadCorner1x;
+  reductionCorner1y[localIdx] = threadCorner1y;
+  reductionCorner1z[localIdx] = threadCorner1z;
+  reductionCorner2x[localIdx] = threadCorner2x;
+  reductionCorner2y[localIdx] = threadCorner2y;
+  reductionCorner2z[localIdx] = threadCorner2z;
 
   barrier();
 
   for (uint stride = LOCAL_SIZE >> 1; stride >= 1; stride >>= 1) { // Reduce to single from local
     if (localIdx < stride) {
-      aabb bestBbox = reductionArray[localIdx];
+      float bestCorner1x = reductionCorner1x[localIdx];
+      float bestCorner1y = reductionCorner1y[localIdx];
+      float bestCorner1z = reductionCorner1z[localIdx];
+      float bestCorner2x = reductionCorner2x[localIdx];
+      float bestCorner2y = reductionCorner2y[localIdx];
+      float bestCorner2z = reductionCorner2z[localIdx];
 
-      bestBbox.corner1 = min(bestBbox.corner1, reductionArray[localIdx + stride].corner1);
-      bestBbox.corner2 = max(bestBbox.corner2, reductionArray[localIdx + stride].corner2);
+      bestCorner1x = min(bestCorner1x, reductionCorner1x[localIdx + stride]);
+      bestCorner1y = min(bestCorner1y, reductionCorner1y[localIdx + stride]);
+      bestCorner1z = min(bestCorner1z, reductionCorner1z[localIdx + stride]);
 
-      reductionArray[localIdx] = bestBbox;
+      bestCorner2x = max(bestCorner2x, reductionCorner2x[localIdx + stride]);
+      bestCorner2y = max(bestCorner2y, reductionCorner2y[localIdx + stride]);
+      bestCorner2z = max(bestCorner2z, reductionCorner2z[localIdx + stride]);
+
+      reductionCorner1x[localIdx] = bestCorner1x;
+      reductionCorner1y[localIdx] = bestCorner1y;
+      reductionCorner1z[localIdx] = bestCorner1z;
+      reductionCorner2x[localIdx] = bestCorner2x;
+      reductionCorner2y[localIdx] = bestCorner2y;
+      reductionCorner2z[localIdx] = bestCorner2z;
     }
 
     barrier();
   }
 
-  if (localIdx == 0) worldBbox = reductionArray[0];
+  if (localIdx == 0) {
+    worldBbox.corner1x = reductionCorner1x[0];
+    worldBbox.corner1y = reductionCorner1y[0];
+    worldBbox.corner1z = reductionCorner1z[0];
+    worldBbox.corner2x = reductionCorner2x[0];
+    worldBbox.corner2y = reductionCorner2y[0];
+    worldBbox.corner2z = reductionCorner2z[0];
+  }
+  ;
 }

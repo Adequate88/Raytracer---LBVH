@@ -55,11 +55,13 @@ inline VkShaderModule load_shader(const std::string &path, VkDevice &device) {
 inline void createStorageBuffer(VkDevice &device, VkBuffer &buffer,
                                 size_t bufferSize,
                                 VkMemoryPropertyFlags memProperties,
-                                VkDeviceMemory &devMemory) {
+                                VkDeviceMemory &devMemory,
+                                VkBufferUsageFlags usage =
+                                    VK_BUFFER_USAGE_STORAGE_BUFFER_BIT) {
 
   VkBufferCreateInfo bufferInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
                                 .size = bufferSize,
-                                .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+                                .usage = usage,
                                 .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
   VK_CHECK(vkCreateBuffer(device, &bufferInfo, nullptr, &buffer));
 
