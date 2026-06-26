@@ -25,7 +25,7 @@
 int main() {
   // --- Scene: identical to scenes.h:load_teapot(600, 600, 20) ---------------
   auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
-  auto mesh_triangles = mesh::load_obj("models/bunny.obj", mat, true, 1.0);
+  auto mesh_triangles = mesh::load_obj("models/bunny_dec.obj", mat, true, 10.0);
   auto &objects = mesh_triangles->objects;
 
   camera cam;
@@ -65,8 +65,8 @@ int main() {
       rgba[p + 2] = cam.img.data[p + 0]; // B
       rgba[p + 3] = cam.img.data[p + 3]; // A
     }
-    stbi_write_png("data/baseline_image.png", cam.image_width, cam.image_height,
-                   4, rgba.data(), cam.image_width * 4);
+    stbi_write_png("data/baseline_image_reduced.png", cam.image_width,
+                   cam.image_height, 4, rgba.data(), cam.image_width * 4);
   }
 
   METRIC_SET_VALUE("Ray Count", static_cast<float>(512 * 512 * 20));
@@ -92,6 +92,6 @@ int main() {
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
 
-  METRIC_EXPORT("data/baseline_metrics.csv");
+  METRIC_EXPORT("data/baseline_metrics_reduced.csv");
   return 0;
 }
