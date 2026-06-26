@@ -39,7 +39,7 @@ layout(binding = 1, std430) readonly buffer SceneBuffer {
 
 // END OF DUPLICATED CODE BLOCK
 
-const int BVH_STACK_SIZE = 64;
+const int BVH_STACK_SIZE = 32;
 
 // layout(push_constant) uniform Camera {} cam;
 

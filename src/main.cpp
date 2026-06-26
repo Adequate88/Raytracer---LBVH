@@ -70,7 +70,7 @@ int main() {
   SDL_Event e;
 
 #ifdef EVALUATE
-  METRIC_BENCHMARK(15, 3, {
+  METRIC_BENCHMARK(25, 5, {
     while (SDL_PollEvent(&e) != 0) {
     }
     raytracer.forceRerender();
@@ -102,7 +102,7 @@ int main() {
                    METRIC_READ("Vulkan Device Init") +
                        METRIC_READ("Total BVH Construction Time") +
                        METRIC_READ("Total Rendering Time"));
-  METRIC_EXPORT("data/megakernel_with_accel_traversal.csv");
+  METRIC_EXPORT("data/megakernel_bvh.csv");
 #endif
 
   return 0;
