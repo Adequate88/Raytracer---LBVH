@@ -10,11 +10,6 @@ class Raytracer {
 public:
   Raytracer(VulkanEngine &engine);
 
-  VkDescriptorSetLayout _setLayout;
-  VkDescriptorSet _descriptorSet;
-  VkDescriptorPool _descriptorPool;
-  VkPipelineLayout _layout;
-  VkPipeline _pipeline;
   // Wavefront variables:
   VkDescriptorSetLayout _wavefrontGenerateDescriptorSetLayout;
   VkDescriptorSetLayout _wavefrontUnifiedDescriptorSetLayout;
@@ -51,7 +46,6 @@ public:
   // in here so the descriptor set can bind them. Build the BVH before calling.
   void initRaytracer(const void *cameraData, VkBuffer sceneBuffer,
                      VkBuffer bvhBuffer);
-  void recordBuffer(uint32_t image_index);
   void recordRenderTime();
 
   void recordWavefrontBuffer(uint32_t image_index);
@@ -83,10 +77,6 @@ private:
 
   void createTimestampPool();
   void createRenderTarget();
-  void createDescriptors();
-
-  void createShaderModule();
-  void createPipeline();
   // Wavefront creation functions
   void createWavefrontBuffers();
   void createWavefrontDescriptors();
