@@ -1,13 +1,13 @@
-BVH Initialization,3.19727
-Bounding Box Kernel,0.0872576,0.00356814
-Hierarchy Creation Kernel,0.0410168,0.00180175
-Morton Code Kernel,0.010674,0.000341186
-Primitive+World BBox Kernel,0.507281,0.0223793
-Radix Sort Kernel,0.48948,0.0188781
-Ray Count,262144
-Rays traced per second,1.52643e+07,415469
-Total BVH Construction Time,5.37378
-Total BVH Kernel Time,1.13571,0.039836
-Total Rendering Time,17.1856,0.470426
-Total Run Time,41.0618
-Vulkan Device Init,18.5024
+BVH Initialization,3.18115
+Bounding Box Kernel,0.0908324,0.00933639
+Hierarchy Creation Kernel,0.0430564,0.0081152
+Morton Code Kernel,0.010906,0.000200313
+Primitive+World BBox Kernel,0.511517,0.00758998
+Radix Sort Kernel,0.494084,0.0118387
+Ray Count,2.62144e+06
+Rays traced per second,1.33544e+08,3.96203e+06
+Total BVH Construction Time,5.36377
+Total BVH Kernel Time,1.1504,0.0342551
+Total Rendering Time,19.6459,0.56632
+Total Run Time,44.6552
+Vulkan Device Init,19.6455

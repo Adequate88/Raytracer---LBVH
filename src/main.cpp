@@ -72,7 +72,7 @@ int main() {
   SDL_Event e;
 
 #ifdef EVALUATE
-  METRIC_BENCHMARK(15, 3, {
+  METRIC_BENCHMARK(25, 5, {
     while (SDL_PollEvent(&e) != 0) {
     }
     uint32_t idx = engine.begin_frame();
