@@ -31,7 +31,7 @@ int main() {
   camera cam;
   cam.image_width = 512;
   cam.image_height = 512;
-  cam.samples_per_pixel = 1;
+  cam.samples_per_pixel = 10;
   cam.max_depth = 20;
   cam.background = color(0.7, 0.8, 1.00);
   cam.vfov = 30;
@@ -74,7 +74,7 @@ int main() {
   // --- Sampled CPU render: "Total Rendering Time" + "Rays traced per second" -
   // (Vulkan samples the render; fewer iterations here since each CPU frame is
   // ~50 s. "Total Rendering Time" is emitted by camera::render.)
-  METRIC_BENCHMARK(15, 3, {
+  METRIC_BENCHMARK(25, 5, {
     cam.render(bvh);
     METRIC_SET_VALUE("Rays traced per second",
                      METRIC_READ("Ray Count") /
