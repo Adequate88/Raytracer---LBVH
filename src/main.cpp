@@ -51,7 +51,7 @@ int main() {
   SDL_Event e;
 
 #ifdef EVALUATE
-  METRIC_BENCHMARK(15, 3, {
+  METRIC_BENCHMARK(25, 5, {
     while (SDL_PollEvent(&e) != 0) {
     }
     uint32_t idx = engine.begin_frame();
@@ -80,7 +80,7 @@ int main() {
 #ifdef EVALUATE
   METRIC_SET_VALUE("Total Run Time", METRIC_READ("Vulkan Device Init") +
                                          METRIC_READ("Total Rendering Time"));
-  METRIC_EXPORT("data/megakernel_no_accel_traversal.csv");
+  METRIC_EXPORT("data/megakernel_no_bvh_reduced.csv");
 #endif
 
   return 0;

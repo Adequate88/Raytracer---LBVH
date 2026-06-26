@@ -78,7 +78,7 @@ scene_config load_bunny(int image_width, int image_height, int samples) {
 
   auto mat = make_shared<lambertian>(color(0.4, 0.6, 0.4));
   auto mesh_triangles =
-      mesh::load_obj(MODELS_DIR + "bunny.obj", mat, true, 1.0);
+      mesh::load_obj(MODELS_DIR + "bunny_dec.obj", mat, true, 10.0);
 
   config.world = convert_for_gpu(*mesh_triangles);
 
